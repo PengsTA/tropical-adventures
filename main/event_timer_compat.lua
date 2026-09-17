@@ -1,5 +1,4 @@
 local Upvaluehelper = Upvaluehelper
-local AddPrefabPostInit = AddPrefabPostInit
 
 GLOBAL.setfenv(1, GLOBAL)
 if not TUNING.GlobalEventsTimerEnabled then return end
@@ -8,6 +7,7 @@ local TimeToString = EventTimer.env.TimeToString           -- 格式化时间
 local ReplacePrefabName = EventTimer.env.ReplacePrefabName -- 填充Prefab名字
 local Extract_by_format = EventTimer.env.Extract_by_format -- 反向提取信息
 local ModLanguage = EventTimer.env.ModLanguage             -- 语言
+local MarkData = EventTimer.env.MarkData                   -- 标记数据来自哪个世界
 
 local function zh_en(zh, en)
     return ModLanguage == "zh" and zh or en
@@ -106,52 +106,29 @@ end
 --------------------------------------------------------------------------------------------------------------
 
 local TimerPrefabList = {
-    "kraken_spawner",       -- 海妖
-    "tigershark_spawner",   -- 虎鲨
-    "slipstor_spawner",     -- 大滑怪
-    "firetwister_spawner",  -- 火豹卷
-    "wildboreking_spawner", -- 野猪王
+    ["kraken_spawner"] = true,       -- 海妖
+    ["tigershark_spawner"] = true,   -- 虎鲨
+    ["slipstor_spawner"] = true,     -- 大滑怪
+    ["firetwister_spawner"] = true,  -- 火豹卷
+    ["wildboreking_spawner"] = true, -- 野猪王
 }
 
-local timerprefabs = {}
-for _, prefab in ipairs(TimerPrefabList) do
-    AddPrefabPostInit(prefab, function(inst)
-        if not TheWorld.ismastersim then
-            return
-        end
-
-        timerprefabs[prefab] = inst
-
-        inst:ListenForEvent("onremove", function()
-            timerprefabs[prefab] = nil
-        end)
-    end)
-end
-
-local function GetTimeLeft(name, prefab)
-    return function()
-        local ent = timerprefabs[prefab] or prefab
-        if ent and ent.components and ent.components.timer then
-            if not ent.components.timer:IsPaused(name) then
-                local time = ent.components.timer:GetTimeLeft(name)
-                return time and time < 65535 and time
-            end
+local function GetTimeLeft(name, ent)
+    if ent and ent.components and ent.components.timer then
+        if not ent.components.timer:IsPaused(name) then
+            local time = ent.components.timer:GetTimeLeft(name)
+            return time
         end
     end
 end
 
--- 从worldsettingstimer或TimerPrefabs获取倒计时
+-- 从worldsettingstimer或prefab获取倒计时
 local function GetWorldSettingsTimeLeft(name, prefab)
-    return function()
-        local ent = TheWorld
-        if prefab then
-            ent = rawget(_G, "TimerPrefabs") and TimerPrefabs[prefab]
-        end
-        if ent and ent.components.worldsettingstimer then
-            if not ent.components.worldsettingstimer:IsPaused(name) then
-                local time = ent.components.worldsettingstimer:GetTimeLeft(name)
-                return time and time < 65535 and time
-            end
+    local ent = prefab or TheWorld
+    if ent and ent.components.worldsettingstimer then
+        if not ent.components.worldsettingstimer:IsPaused(name) then
+            local time = ent.components.worldsettingstimer:GetTimeLeft(name)
+            return time
         end
     end
 end
@@ -163,77 +140,38 @@ TropicalAdventuresEvents = {
 
     ---------------------------------------- 猪镇 ---------------------------------------
 
-    aporkalypse = { -- 大灾变倒计时
-        gettimefn = function()
-            return TheWorld.components.aporkalypse and (not TheWorld.components.aporkalypse:IsActive()) and
-            TheWorld.components.aporkalypse.begin_date - GetTimeTnSeconds()
-        end,
-        gettextfn = function(time)
-            if time and time > 0 then
-                return string.format(STRINGS.eventtimer.aporkalypse.cooldown, TimeToString(time))
-            end
-        end,
-        image = {
-            atlas = "images/Aporkalypse_Clock.xml",
-            tex = "Aporkalypse_Clock.tex",
-            scale = 0.2
-        },
-        DisableShardRPC = true, -- 地上地下都有这个组件，同步会冲突
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.aporkalypse_time
-            if time and time > 0 then
-                return string.format(STRINGS.eventtimer.aporkalypse.cooldown, TimeToString(time))
-            end
-        end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.aporkalypse_time
-
-            if (JustEntered(time) and time < 2400) then
-                return true, string.format(STRINGS.eventtimer.aporkalypse.cooldown, TimeToString(time)), 10, nil, 1
-            elseif time == 480 then
-                return true, string.format(STRINGS.eventtimer.aporkalypse.tips, TimeToString(time)), 10, nil, 2
-            elseif time == 0 then                                                                                                            -- 这个写法比较特殊..为了保证大灾变确实开始了
-                return true,
-                    not (GetTime() > 1 and GetTime() < 10) and
-                    StringToFunction(STRINGS.eventtimer.aporkalypse.tips_ready), 5, 1, 3                                                     -- 延迟1秒是因为大灾变在1秒后才真正开始
-            end
-            return false
-        end
-    },
-    aporkalypse_attack = { -- 大灾变中的事件倒计时（蝙蝠袭击、远古先驱袭击）
-        gettimefn = function()
-            if TheWorld.components.aporkalypse and TheWorld.components.aporkalypse:IsActive() then
+    aporkalypse = { -- 大灾变倒计时 / 大灾变中的事件倒计时（蝙蝠袭击、远古先驱袭击）
+        gettimefn = function(self)
+            if self:IsActive() then
                 if TheWorld:HasTag("cave") then
-                    return GetTimeLeft("aporkalypse.herald", TheWorld)()  -- 先驱
+                    return GetTimeLeft("aporkalypse.herald", TheWorld)  -- 先驱
                 else
-                    return GetTimeLeft("aporkalypse.vampire", TheWorld)() -- 蝙蝠
+                    return GetTimeLeft("aporkalypse.vampire", TheWorld) -- 蝙蝠
                 end
-            end
-        end,
-        gettextfn = function(time)
-            if time and time > 0 then
-                if TheWorld:HasTag("cave") then
-                    local VampireTimer = GetTimeLeft("aporkalypse.vampire", TheWorld)()
-                    return string.format(ReplacePrefabName(strings.aporkalypse.attack),
-                        VampireTimer and TimeToString(VampireTimer) or strings.aporkalypse.attacked, TimeToString(time))
-                else
-                    return string.format(ReplacePrefabName(STRINGS.eventtimer.batted.cooldown), TimeToString(time))
-                end
-            end
-        end,
-        imagechangefn = function(self)
-            if TheWorld:HasTag("cave") then
-                self.image = self.caveimage
             else
-                self.image = self.forestimage
+                return self.begin_date - GetTimeTnSeconds()
             end
         end,
-        forestimage = { -- 灾变日历的图片
-            atlas = "images/Aporkalypse_Clock.xml",
-            tex = "Aporkalypse_Clock.tex",
-            scale = 0.2
-        },
-        caveimage = { -- 远古先驱的图片
+        gettextfn = function(self, time)
+            if not self:IsActive() then return end
+            if time and time > 0 then
+                if TheWorld:HasTag("cave") then
+                    local VampireTimer = GetTimeLeft("aporkalypse.vampire", TheWorld)
+                    return string.format(ReplacePrefabName(strings.aporkalypse.attack),
+                        VampireTimer and TimeToString(VampireTimer) or strings.aporkalypse.attacked, TimeToString(time)) -- 吸血蝙蝠+远古先驱袭击
+                else
+                    return string.format(ReplacePrefabName(STRINGS.eventtimer.batted.cooldown), TimeToString(time)) -- 吸血蝙蝠袭击
+                end
+            end
+        end,
+        imagechangefn = function(self, context)
+            if context.world_type == "cave" then
+                self.image = self.Ancient_Herald_image
+            else
+                self.image = self.Aporkalypse_Clock_image
+            end
+        end,
+        Ancient_Herald_image = { -- 远古先驱的图片
             atlas = "images/Ancient_Herald.xml",
             tex = "Ancient_Herald.tex",
             scale = 0.2,
@@ -242,37 +180,51 @@ TropicalAdventuresEvents = {
                 y = 7,
             }
         },
-        announcefn = function()
-            if TheWorld:HasTag("cave") then
-                local text = ThePlayer.HUD.WarningEventTimeData.aporkalypse_attack_text
+        Aporkalypse_Clock_image = { -- 灾变日历的图片
+            atlas = "images/Aporkalypse_Clock.xml",
+            tex = "Aporkalypse_Clock.tex",
+            scale = 0.2
+        },
+        DisableShardRPC = true, -- 地上地下都有这个组件
+        announcefn = function(context)
+            local time = context.time
+            local text = context.text
+            -- 大灾变倒计时
+            if text == "" and time > 0 then
+                return string.format(STRINGS.eventtimer.aporkalypse.cooldown, TimeToString(time))
+            end
+            -- 大灾变中的事件倒计时
+            if context.world_type == "cave" then
                 local VampireTimer, HeraldTimer = Extract_by_format(text, ReplacePrefabName(strings.aporkalypse.attack))
                 if not (VampireTimer and HeraldTimer) then return end
                 return string.format(ReplacePrefabName(strings.aporkalypse.announce_attack), VampireTimer, HeraldTimer)
             else
-                local time = ThePlayer.HUD.WarningEventTimeData.aporkalypse_attack_time
-                if time and time > 0 then
+                if time > 0 then
                     return string.format(ReplacePrefabName(STRINGS.eventtimer.batted.cooldown), TimeToString(time))
                 end
             end
         end,
-        DisableShardRPC = true,
-        tipsfn = nil,
+        tipsfn = function(context)
+            if context.text ~= "" then return true end -- 非大灾变倒计时，不运行（返回true避免在蝙蝠袭击以后因text变空而提示血月降临）
+            local time = context.time
+            if (JustEntered(time) and time < 2400) then
+                return true, TropicalAdventuresEvents.aporkalypse.announcefn, 10, nil, 1
+            elseif time == 480 then
+                return true, function() return MarkData(string.format(STRINGS.eventtimer.aporkalypse.tips, TimeToString(context.time)), context) end, 10, nil, 2
+            elseif time == 0 then                                                                                                            -- 这个写法比较特殊..为了保证大灾变确实开始了
+                return true, (GetTime() > 10) and StringToFunction(STRINGS.eventtimer.aporkalypse.tips_ready), 5, 1, 3                       -- 延迟1秒是因为大灾变在1秒后才真正开始
+            end
+            return false
+        end
     },
     rocmanager = { -- 友善的大鹏
-        gettimefn = function()
-            if TheWorld.components.rocmanager then
-                return TheWorld.components.rocmanager.nexttime
-            end
+        gettimefn = function(self)
+            return self.nexttime
         end,
-        gettextfn = function(time)
-            local self = TheWorld.components.rocmanager
-            if not self then return end
+        gettextfn = function(self, time)
             local data = self:OnSave()
             if data.roc then
                 return ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)
-            end
-            if time and time > 0 then
-                return TimeToString(time)
             end
         end,
         image = {
@@ -290,24 +242,29 @@ TropicalAdventuresEvents = {
                 y = -15,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.rocmanager_time
-            local text = ThePlayer.HUD.WarningEventTimeData.rocmanager_text
+        announcefn = function(context)
+            local time = context.time
+            local text = context.text
+            local desc
             if text and string.find(text, ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)) then
-                return ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)
+                desc = ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)
             elseif time and time > 0 then
-                return string.format(ReplacePrefabName(STRINGS.eventtimer.rocmanager.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(STRINGS.eventtimer.rocmanager.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.rocmanager_time
-            local text = ThePlayer.HUD.WarningEventTimeData.rocmanager_text
-            if time > TUNING.SEG_TIME / 2 and time <= 90 then
-                return true, TropicalAdventuresEvents.rocmanager.announcefn, 10, nil, 2
+        tipsfn = function(context)
+            local time = context.time
+            local text = context.text
+            if time > (TUNING.SEG_TIME / 2) and time <= 90 then
+                return true, TropicalAdventuresEvents.rocmanager.announcefn, time, nil, 2
             elseif JustEntered(time) and time < 960 then
                 return true, TropicalAdventuresEvents.rocmanager.announcefn, 10, nil, 2
             elseif text == ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists) then
-                return true, StringToFunction(ReplacePrefabName(STRINGS.eventtimer.rocmanager.tips)), 10, nil, 3
+                local desc = ReplacePrefabName(STRINGS.eventtimer.rocmanager.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, nil, 3
             elseif JustEntered(time) then
                 return true, TropicalAdventuresEvents.rocmanager.announcefn, 10, nil, 1
             end
@@ -315,15 +272,13 @@ TropicalAdventuresEvents = {
         end
     },
     banditmanager = {
-        gettimefn = GetWorldSettingsTimeLeft("pig_bandit_respawn"),
-        gettextfn = function(time)
-            local self = TheWorld.components.banditmanager
-            if not self then return end
+        gettimefn = function(self)
+            return GetWorldSettingsTimeLeft("pig_bandit_respawn")
+        end,
+        gettextfn = function(self, time)
             local _bandit = Upvaluehelper.GetUpvalue(self.SpawnBanditOnPlayer, "_bandit")
             if _bandit then
                 return ReplacePrefabName(strings.banditmanager.ready)
-            else
-                return TimeToString(time)
             end
         end,
         image = {
@@ -343,17 +298,22 @@ TropicalAdventuresEvents = {
             }
         },
         DisableShardRPC = true,
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.banditmanager_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(strings.banditmanager.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(strings.banditmanager.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local text = ThePlayer.HUD.WarningEventTimeData.banditmanager_text
+        tipsfn = function(context)
+            local text = context.text
             local ready = text == ReplacePrefabName(strings.banditmanager.ready)
             if ready then
-                return true, StringToFunction(ReplacePrefabName(strings.banditmanager.tips)), 5, nil, 3
+                local desc = ReplacePrefabName(strings.banditmanager.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 5, nil, 3
             end
         end
     },
@@ -361,24 +321,16 @@ TropicalAdventuresEvents = {
     ---------------------------------------- 海难 ---------------------------------------
 
     twisterspawner = { -- 豹卷风
-        gettimefn = function()
-            if TheWorld.components.twisterspawner then
-                local data = TheWorld.components.twisterspawner:OnSave()
-                return data.timetospawn
-            end
+        gettimefn = function(self)
+            local data = self:OnSave()
+            return data.timetospawn
         end,
-        gettextfn = function(time)
-            local self = TheWorld.components.twisterspawner
-            if not self then return end
+        gettextfn = function(self, time)
             local description
             local target = Upvaluehelper.GetUpvalue(self.OnUpdate, "_targetplayer")
             if time and target and target.name then
                 description = string.format(STRINGS.eventtimer.twisterspawner.targeted, target.name, TimeToString(time))
-            elseif time then
-                description = string.format(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.cooldown),
-                    TimeToString(time))
             end
-
             return description
         end,
         image = {
@@ -393,31 +345,37 @@ TropicalAdventuresEvents = {
             animation = "idle_loop",
             loop = true
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.twisterspawner_time
-            local text = ThePlayer.HUD.WarningEventTimeData.twisterspawner_text
+        announcefn = function(context)
+            local time = context.time
+            local text = context.text
+            local desc
             local target, _ = Extract_by_format(text, STRINGS.eventtimer.twisterspawner.targeted)
-            if target and time then
-                return string.format(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.target), target,
-                    TimeToString(time))
-            elseif time then
-                return string.format(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.cooldown), TimeToString(time))
+            if target and time > 0 then
+                desc = string.format(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.target), target, TimeToString(time))
+            elseif time > 0 then
+                desc = string.format(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.twisterspawner_time
+        tipsfn = function(context)
+            local time = context.time
             if time > 2 and time <= 60 then
                 return true, TropicalAdventuresEvents.twisterspawner.announcefn, time, nil, 2
             elseif time == 480 or JustEntered(time) then
                 return true, TropicalAdventuresEvents.twisterspawner.announcefn, 10, nil, 2
             elseif ready_attack(time) then
-                return true, StringToFunction(ReplacePrefabName(STRINGS.eventtimer.twisterspawner.attack)), 10, time, 3
+                local desc = ReplacePrefabName(STRINGS.eventtimer.twisterspawner.attack)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, time, 3
             end
             return false
         end
     },
     kraken_spawner = { -- 海妖
-        gettimefn = GetTimeLeft("spawndelay", "kraken_spawner"),
+        gettimefn = function(self)
+            return GetTimeLeft("spawndelay", self)
+        end,
         anim = {
             scale = 0.027,
             bank = "quacken",
@@ -429,22 +387,29 @@ TropicalAdventuresEvents = {
                 y = -6,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.kraken_spawner_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(STRINGS.eventtimer.krakener.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(STRINGS.eventtimer.krakener.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.kraken_spawner_time
+        tipsfn = function(context)
+            local time = context.time
             if ready_attack(time) then
-                return true, StringToFunction(ReplacePrefabName(STRINGS.eventtimer.krakener.tips)), 10, time, 2
+                local desc = ReplacePrefabName(STRINGS.eventtimer.krakener.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, time, 2
             end
             return false
         end
     },
     tigershark_spawner = { -- 虎鲨
-        gettimefn = GetTimeLeft("spawndelay", "tigershark_spawner"),
+        gettimefn = function(self)
+            return GetTimeLeft("spawndelay", self)
+        end,
         anim = {
             scale = 0.03,
             bank = "tigershark",
@@ -456,22 +421,29 @@ TropicalAdventuresEvents = {
                 y = -6,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.tigershark_spawner_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(STRINGS.eventtimer.tigersharker.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(STRINGS.eventtimer.tigersharker.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.tigershark_spawner_time
+        tipsfn = function(context)
+            local time = context.time
             if ready_attack(time) then
-                return true, StringToFunction(ReplacePrefabName(strings.tigershark_spawner.tips)), 10, time, 2
+                local desc = ReplacePrefabName(strings.tigershark_spawner.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, time, 2
             end
             return false
         end
     },
     slipstor_spawner = { -- 大滑怪
-        gettimefn = GetTimeLeft("spawndelay", "slipstor_spawner"),
+        gettimefn = function(self)
+            return GetTimeLeft("spawndelay", self)
+        end,
         anim = {
             scale = 0.07,
             bank = "slipstor",
@@ -483,15 +455,20 @@ TropicalAdventuresEvents = {
                 y = -6,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.slipstor_spawner_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(strings.slipstor_spawner.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(strings.slipstor_spawner.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end
     },
     firetwister_spawner = { -- 火豹卷
-        gettimefn = GetTimeLeft("spawndelay", "firetwister_spawner"),
+        gettimefn = function(self)
+            return GetTimeLeft("spawndelay", self)
+        end,
         anim = {
             scale = 0.03,
             bank = "twister",
@@ -508,22 +485,29 @@ TropicalAdventuresEvents = {
                 y = -3,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.firetwister_spawner_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(strings.firetwister_spawner.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(strings.firetwister_spawner.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.firetwister_spawner_time
+        tipsfn = function(context)
+            local time = context.time
             if ready_attack(time) then
-                return true, StringToFunction(ReplacePrefabName(strings.firetwister_spawner.tips)), 10, time, 2
+                local desc = ReplacePrefabName(strings.firetwister_spawner.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, time, 2
             end
             return false
         end
     },
     wildboreking_spawner = { -- 野猪王
-        gettimefn = GetTimeLeft("spawndelay", "wildboreking_spawner"),
+        gettimefn = function(self)
+            return GetTimeLeft("spawndelay", self)
+        end,
         anim = {
             scale = 0.055,
             bank = "pigkingext",
@@ -539,16 +523,21 @@ TropicalAdventuresEvents = {
                 y = 1,
             },
         },
-        announcefn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.wildboreking_spawner_time
+        announcefn = function(context)
+            local time = context.time
+            local desc
             if time and time > 0 then
-                return string.format(ReplacePrefabName(strings.wildboreking_spawner.cooldown), TimeToString(time))
+                desc = string.format(ReplacePrefabName(strings.wildboreking_spawner.cooldown), TimeToString(time))
             end
+            desc = MarkData(desc, context)
+            return desc
         end,
-        tipsfn = function()
-            local time = ThePlayer.HUD.WarningEventTimeData.wildboreking_spawner_time
+        tipsfn = function(context)
+            local time = context.time
             if ready_attack(time) then
-                return true, StringToFunction(ReplacePrefabName(strings.wildboreking_spawner.tips)), 10, time, 2
+                local desc = ReplacePrefabName(strings.wildboreking_spawner.tips)
+                desc = MarkData(desc, context)
+                return true, StringToFunction(desc), 10, time, 2
             end
             return false
         end
@@ -556,5 +545,8 @@ TropicalAdventuresEvents = {
 }
 
 for k, v in pairs(TropicalAdventuresEvents) do
+    if TimerPrefabList[k] then
+        v.timerprefab = k
+    end
     _G.WarningEvents[k] = v
 end

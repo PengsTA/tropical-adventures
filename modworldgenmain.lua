@@ -10,7 +10,7 @@ require "tools/tileutil"                ----一些关于tile的工具函数
 require "tools/spawnutil"               ----地形生成相关工具
 
 modimport "scripts/tools/modutil"       ----api修改及新的mod工具
-modimport "scripts/tools/upvaluehelper" ----用来hook的一些函数 来自BBGoat
+modimport "scripts/tools/upvaluehelper" ----用来hook的一些函数 来自冰冰羊
 modimport "main/tuning"                 -- tuning + constants
 modimport "main/ta_customize"           ----世界设置项
 modimport "main/ta_config"              ----mod 设置相关内容
