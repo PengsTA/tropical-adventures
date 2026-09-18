@@ -240,15 +240,15 @@ return Class(function(self, inst)
 		player.components.talker:Say(GetString(player, "ANNOUNCE_DEERCLOPS"))
 	end
 
-	function self:DoWarningSpeech(_targetplayer)
+	function self:DoWarningSpeech(targetplayer)
 		for i, v in ipairs(_activeplayers) do
-			if v == _targetplayer or v:IsNear(_targetplayer, HASSLER_SPAWN_DIST * 2) then
+			if v == targetplayer or v:IsNear(targetplayer, HASSLER_SPAWN_DIST * 2) then
 				v:DoTaskInTime(math.random() * 2, _DoWarningSpeech)
 			end
 		end
 	end
 
-	function self:DoWarningSound(_targetplayer)
+	function self:DoWarningSound(targetplayer)
 		--Players near _targetplayer will hear the warning sound from the
 		--same direction and volume offset from their own local positions
 		SpawnPrefab("twisterwarning_lvl" ..
@@ -257,8 +257,12 @@ return Class(function(self, inst)
 				(_timetospawn < 60 and "3") or
 				(_timetospawn < 90 and "2") or
 				"1")
-		).Transform:SetPosition(_targetplayer.Transform:GetWorldPosition())
+		).Transform:SetPosition(targetplayer.Transform:GetWorldPosition())
 	end
+
+    function self:GetTargetPlayer()
+        return _targetplayer
+    end
 
 	function self:OnUpdate(dt)
 		--print("TwisterSpawner time to spawn is ", _timetospawn or "nil", _numSpawned or "0", _targetNum or "0")

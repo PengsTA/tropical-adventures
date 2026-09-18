@@ -102,6 +102,9 @@ return Class(function(self, inst)
     end
 
     local function OnBanditDeath(src, data)
+        if not (data and data.bandit and data.bandit:IsValid() and data.bandit == _bandit) then
+            return
+        end
         StartRespawnTimer(BANDIT_RESPAWN_TIME)
         _bandit = nil
     end
@@ -146,6 +149,10 @@ return Class(function(self, inst)
             cz = cz - 1 * math.sin(angle)
             _bandit.Transform:SetPosition(cx, 0, cz)
         end
+    end
+
+    function self:HasBandit()
+        return _bandit ~= nil
     end
 
     --------------------------------------------------------------------------

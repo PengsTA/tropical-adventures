@@ -77,7 +77,7 @@ local function Retarget(inst)
         function(guy)
             if inst.components.combat:CanTarget(guy) and guy.components.inventory and ((guy:HasTag("player")) or (guy.prefab == "pigman")) then
                 local oinks = guy.components.inventory:FindItem(function(item) return item:HasTag("oinc") end)
-                return oinks
+                return oinks ~= nil
             end
 
             return false

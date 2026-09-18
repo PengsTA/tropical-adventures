@@ -276,7 +276,7 @@ TropicalAdventuresEvents = {
             return GetWorldSettingsTimeLeft("pig_bandit_respawn")
         end,
         gettextfn = function(self, time)
-            local _bandit = Upvaluehelper.GetUpvalue(self.SpawnBanditOnPlayer, "_bandit")
+            local _bandit = self:HasBandit()
             if _bandit then
                 return ReplacePrefabName(strings.banditmanager.ready)
             end
@@ -327,7 +327,7 @@ TropicalAdventuresEvents = {
         end,
         gettextfn = function(self, time)
             local description
-            local target = Upvaluehelper.GetUpvalue(self.OnUpdate, "_targetplayer")
+            local target = self:GetTargetPlayer()
             if time and target and target.name then
                 description = string.format(STRINGS.eventtimer.twisterspawner.targeted, target.name, TimeToString(time))
             end
