@@ -248,7 +248,7 @@ TropicalAdventuresEvents = {
             local desc
             if text and string.find(text, ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)) then
                 desc = ReplacePrefabName(STRINGS.eventtimer.rocmanager.exists)
-            elseif time and time > 0 then
+            elseif time > 0 then
                 desc = string.format(ReplacePrefabName(STRINGS.eventtimer.rocmanager.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)
@@ -297,14 +297,16 @@ TropicalAdventuresEvents = {
                 y = -15,
             }
         },
-        DisableShardRPC = true,
+        DisableShardRPC = true, -- 禁用跨世界同步
         announcefn = function(context)
             local time = context.time
+            local text = context.text
             local desc
-            if time and time > 0 then
+            if text == ReplacePrefabName(strings.banditmanager.ready) then
+                desc = text
+            elseif time > 0 then
                 desc = string.format(ReplacePrefabName(strings.banditmanager.cooldown), TimeToString(time))
             end
-            desc = MarkData(desc, context)
             return desc
         end,
         tipsfn = function(context)
@@ -312,7 +314,6 @@ TropicalAdventuresEvents = {
             local ready = text == ReplacePrefabName(strings.banditmanager.ready)
             if ready then
                 local desc = ReplacePrefabName(strings.banditmanager.tips)
-                desc = MarkData(desc, context)
                 return true, StringToFunction(desc), 5, nil, 3
             end
         end
@@ -390,7 +391,7 @@ TropicalAdventuresEvents = {
         announcefn = function(context)
             local time = context.time
             local desc
-            if time and time > 0 then
+            if time > 0 then
                 desc = string.format(ReplacePrefabName(STRINGS.eventtimer.krakener.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)
@@ -424,7 +425,7 @@ TropicalAdventuresEvents = {
         announcefn = function(context)
             local time = context.time
             local desc
-            if time and time > 0 then
+            if time > 0 then
                 desc = string.format(ReplacePrefabName(STRINGS.eventtimer.tigersharker.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)
@@ -458,7 +459,7 @@ TropicalAdventuresEvents = {
         announcefn = function(context)
             local time = context.time
             local desc
-            if time and time > 0 then
+            if time > 0 then
                 desc = string.format(ReplacePrefabName(strings.slipstor_spawner.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)
@@ -488,7 +489,7 @@ TropicalAdventuresEvents = {
         announcefn = function(context)
             local time = context.time
             local desc
-            if time and time > 0 then
+            if time > 0 then
                 desc = string.format(ReplacePrefabName(strings.firetwister_spawner.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)
@@ -526,7 +527,7 @@ TropicalAdventuresEvents = {
         announcefn = function(context)
             local time = context.time
             local desc
-            if time and time > 0 then
+            if time > 0 then
                 desc = string.format(ReplacePrefabName(strings.wildboreking_spawner.cooldown), TimeToString(time))
             end
             desc = MarkData(desc, context)

@@ -36,7 +36,7 @@ return Class(function(self, inst)
     end
 
     local function TrySpawnBanit()
-        print("try to spawn a bandit!!!")
+        -- print("try to spawn a bandit!!!")
 
         if _world.state.isaporkalypse then
             return
@@ -84,6 +84,7 @@ return Class(function(self, inst)
     end
 
     local function StartRespawnTimer(time)
+        BANDIT_RESPAWN_TIME = TUNING.TOTAL_DAY_TIME * (math.random() + 0.1)
         _worldsettingstimer:StopTimer(BANDIT_TIMER_NAME)
         _worldsettingstimer:StartTimer(BANDIT_TIMER_NAME, time or BANDIT_RESPAWN_TIME, false)
     end
@@ -105,7 +106,7 @@ return Class(function(self, inst)
         if not (data and data.bandit and data.bandit:IsValid() and data.bandit == _bandit) then
             return
         end
-        StartRespawnTimer(BANDIT_RESPAWN_TIME)
+        StartRespawnTimer()
         _bandit = nil
     end
 
