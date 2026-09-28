@@ -12,9 +12,7 @@ local MAX_VENOM_GLAND_DAMAGE = 80
 local MIN_VENOM_GLAND_LEFTOVER = 5
 
 local function oneat(inst, eater)
-    if not eater.components.poisonable then return end
-    eater.components.poisonable:WearOff(TUNING.TOTAL_DAY_TIME / 2)
-    return true
+    return TroRemovePoison(eater, TUNING.TOTAL_DAY_TIME / 2)
 end
 
 local function oneat_anti(inst, eater)

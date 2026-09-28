@@ -5,9 +5,7 @@ local assets =
 }
 
 local function oneaten(inst, eater)
-    if eater.components.poisonable then
-        eater.components.poisonable:SetPoison(-2, 3, 60)
-    end
+    TroApplyPoison(eater, -2, 3, 60)
 end
 
 local function fn(Sim)

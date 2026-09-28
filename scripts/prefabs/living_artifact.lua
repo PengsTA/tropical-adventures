@@ -115,9 +115,7 @@ end
 local function ToggleComponents(inst, user, on)
     ToggleTags(user, on)
     if on then
-        if user.components.poisonable then
-            user.components.poisonable:WearOff()
-        end
+        TroRemovePoison(user)
 
         -- inst.components.inventory:DropEverything(true, false)
 

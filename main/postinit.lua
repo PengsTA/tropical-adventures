@@ -49,7 +49,7 @@ modimport "postinit/boat"                   --单人船相关修改
 modimport "postinit/natureskin_variants"    --和自然皮肤切换相关的所有内容
 modimport "postinit/player_vision_post"     --四眼镜、蝙蝠帽所用
 modimport "postinit/tile_post"              --特殊地皮挖起
-modimport "postinit/poisonables"            --posonables--and loot dropper--
+modimport "postinit/poisonables"            --毒素debuff接口--and loot dropper--
 -- modimport "postinit/camera"               --旧的房间镜头
 -- modimport "postinit/sim_rain_effect"
 -- modimport "postinit/player_darkness" --没有用

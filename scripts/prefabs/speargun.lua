@@ -71,9 +71,7 @@ local function onthrown(inst, data)
 end
 
 local function poisonattack(inst, attacker, target)
-    if target.components.poisonable then
-        target.components.poisonable:Poison()
-    end
+    TroApplyPoison(target, -4, 5, 120)
     if target.components.combat then
         target.components.combat:SuggestTarget(attacker)
     end

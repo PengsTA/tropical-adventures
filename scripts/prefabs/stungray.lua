@@ -31,7 +31,7 @@ local STINKRAY_SCALE_FLYING = 1.05
 local STINKRAY_SCALE_WATER = 1.00
 
 local function KeepThreat(inst, threat)
-	return threat:GetIsOnWater(threat:GetPosition():Get()) -- and not (threat.components.poisonable and threat.components.poisonable:IsPoisoned())
+	return threat:GetIsOnWater(threat:GetPosition():Get())
 end
 
 local function MakeTeam(inst, attacker)

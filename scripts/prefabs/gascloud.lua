@@ -16,11 +16,8 @@ local function dogason(inst)
 		inst.OnGasChange(inst, true)
 	else
 		if inst:HasTag("insect") and inst.components.health then
-			if inst and inst.components.poisonable == nil then
-				inst:AddComponent("poisonable")
-			end
 			inst.components.health.invincible = false
-			inst.components.poisonable:SetPoison(-4, 0.05, 3)
+			TroApplyPoison(inst, -4, 0.05, 3)
 		end
 	end
 end

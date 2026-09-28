@@ -20,9 +20,7 @@ local function FountainOnAccept(inst, giver, item)
 
     if math.random() * 25 < value then
         inst:DoTaskInTime(1, function()
-            if giver.components.poisonable ~= nil then
-                giver.components.poisonable:WearOff()
-            end
+            TroRemovePoison(giver)
             if giver.components.health and giver.components.health:GetPercent() < 1 then
                 giver.components.health:DoDelta(value * 5, false, inst.prefab)
                 giver:PushEvent("celebrate")

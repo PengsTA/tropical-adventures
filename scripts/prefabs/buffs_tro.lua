@@ -5,10 +5,6 @@ local buffattr = {
         tropicalbouillabaisse = { priority = 3, mult = TUNING.BOUILLABAISSE_SPEED_MODIFIER, duration = TUNING.BUFF_BOUILLABAISSE_DURATION, name = "buff_speedup_tro_3", },
         tea                   = { priority = 2, mult = TUNING.COFFEE_SPEED_INCREASE / 2 + 1, duration = TUNING.BUFF_COFFEE_DURATION / 2, name = "buff_speedup_tro_2", },
         icedtea               = { priority = 1, mult = TUNING.COFFEE_SPEED_INCREASE / 3 + 1, duration = TUNING.BUFF_COFFEE_DURATION / 3, name = "buff_speedup_tro_1", },
-    },
-    poisoned = {
-        poisoned  = { name = "buff_poisoned_tro", },
-        antitoxin = { name = "buff_antitoxin_tro", },
     }
 }
 
@@ -66,18 +62,197 @@ fns.speedup.detach = function(inst, target)
     inst._debuffkey_tro = nil
 end
 
-fns.poisoned.attach = function(inst, target, followsymbol, followoffset, data)
-    if not data or not target.components.medal_showbufftime then return end
-    inst.components.timer:StopTimer("buffover")
-    inst.components.timer:StartTimer("buffover", data.duration)
-    inst._debuffkey_tro = data.debuffkey
-    if target.components.medal_showbufftime then
-        inst.nameoverride = buffattr.poisoned[inst._debuffkey_tro].name
-        target.components.medal_showbufftime:SetBuffInfo()
+--------------------------------------------------------------------------
+-- 中毒 debuff：承载全部毒逻辑（跳伤、间隔递增、掉落腐败、气泡特效、HUD 同步）。
+-- 状态以 AddDebuff 的 data 传入：{ dmg, interval, duration }。
+-- 存档：debuffable:OnSave 会把本实体整个序列化进宿主存档并在读档时重建；
+-- "buffover" 剩余时间由 timer 组件自动恢复，数值字段由下方 OnSave/OnLoad 恢复。
+local POISON_DEFAULT_DURATION = 60 * 16
+local POISON_MAX_INTERVAL = 5
+local POISON_MIN_INTERVAL = 1
+local POISON_CURE_TAGS = { "weremoose", "weregoose", "beaver", "playerghost" }
+
+local function SpoilLoot(inst, loot)
+    if loot.components.perishable then
+        loot.components.perishable:SetPercent(0.5 * loot.components.perishable:GetPercent())
+    end
+    return loot
+end
+
+local function FollowBurnSymbol(fx, target)
+    local burnable = target.components.burnable
+    if burnable and #burnable.fxdata > 0 then
+        local symbol = burnable.fxdata[1].follow
+        if symbol then
+            fx.Follower:FollowSymbol(target.GUID, symbol, 0, 0, 0)
+        end
     end
 end
 
-fns.poisoned.extend = fns.poisoned.attach
+-- 保留旧 poisonable:IncreaseIntensity 的行为（progress = 起始时长/剩余时长，仅作用于 interval > 1 的毒）
+local function IncreaseIntensity(inst)
+    if inst.interval > POISON_MIN_INTERVAL then
+        local left = inst.components.timer:GetTimeLeft("buffover")
+        if left ~= nil and left > 0 then
+            inst.interval = math.max(inst.startDuration / left * POISON_MAX_INTERVAL, POISON_MIN_INTERVAL)
+        end
+    end
+end
+
+local function PoisonDisplay(inst, target)
+    inst.nameoverride = "buff_poisoned_tro"
+    if target.player_classified ~= nil then
+        target.player_classified.poisonstate:set(1)
+    end
+    if target.components.medal_showbufftime ~= nil then
+        target.components.medal_showbufftime:SetBuffInfo()
+        if target.replica ~= nil and target.replica.medal_showbufftime ~= nil then
+            target.replica.medal_showbufftime:GetBuffInfo()
+        end
+    end
+end
+
+local function PoisonTick(inst)
+    local target = inst.components.debuff.target
+    if target == nil or not target:IsValid() then return end
+    local health = target.components.health
+    if health == nil or health:IsDead() then return end
+
+    if target:HasOneOfTags(POISON_CURE_TAGS) then
+        inst.components.debuff:Stop()
+        return
+    end
+
+    inst.lastDamageTime = inst.lastDamageTime - FRAMES
+    if inst.lastDamageTime <= 0 then
+        health:DoDelta(inst.dmg, nil, "poison")
+        IncreaseIntensity(inst)
+        inst.lastDamageTime = inst.interval
+        if target.player_classified ~= nil then
+            target.player_classified.poisonover:set_local(true)
+            target.player_classified.poisonover:set(true)
+        end
+    end
+
+    if inst.poisonfx == nil and inst.dmg < 0 then
+        inst.poisonfx = SpawnPrefab("poisonbubble_level1_loop")
+        target:AddChild(inst.poisonfx)
+        FollowBurnSymbol(inst.poisonfx, target)
+    end
+end
+
+fns.poisoned.attach = function(inst, target, followsymbol, followoffset, data)
+    if data ~= nil then
+        inst.dmg = data.dmg or -1
+        inst.interval = data.interval or POISON_MAX_INTERVAL
+        inst.startDuration = data.duration or POISON_DEFAULT_DURATION
+        inst.lastDamageTime = 0
+        inst.components.timer:StopTimer("buffover")
+        inst.components.timer:StartTimer("buffover", inst.startDuration)
+    end
+    -- data == nil 为读档重挂：状态字段已由 OnLoad 恢复
+    if target.components.lootdropper ~= nil then
+        target.components.lootdropper:SetLootPostInit("poisoned", SpoilLoot)
+    end
+    PoisonDisplay(inst, target)
+    if inst.ticktask == nil then
+        inst.ticktask = inst:DoPeriodicTask(FRAMES, PoisonTick)
+    end
+end
+
+fns.poisoned.extend = function(inst, target, followsymbol, followoffset, data)
+    if data ~= nil then
+        inst.dmg = data.dmg or inst.dmg
+        inst.interval = data.interval or inst.interval
+        inst.startDuration = data.duration or inst.startDuration -- 重置间隔递增基准（同旧 SetPoison 语义）
+        inst.components.timer:StopTimer("buffover")
+        inst.components.timer:StartTimer("buffover", inst.startDuration)
+    end
+    if target.components.lootdropper ~= nil then
+        target.components.lootdropper:SetLootPostInit("poisoned", SpoilLoot)
+    end
+    PoisonDisplay(inst, target)
+    if inst.ticktask == nil then
+        inst.ticktask = inst:DoPeriodicTask(FRAMES, PoisonTick)
+    end
+end
+
+fns.poisoned.detach = function(inst, target)
+    if inst.ticktask ~= nil then
+        inst.ticktask:Cancel()
+        inst.ticktask = nil
+    end
+    if inst.poisonfx ~= nil then
+        inst.poisonfx:Remove()
+        inst.poisonfx = nil
+    end
+    if target.components.lootdropper ~= nil then
+        target.components.lootdropper:RemoveLootPostInit("poisoned")
+    end
+    if target.player_classified ~= nil then
+        target.player_classified.poisonstate:set(0)
+    end
+end
+
+local function PoisonedSetup(inst)
+    -- 默认值兜底：读档重挂时 attach(data==nil) 之前先保证字段有合法初值
+    inst.dmg = -1
+    inst.interval = POISON_MAX_INTERVAL
+    inst.startDuration = POISON_DEFAULT_DURATION
+    inst.lastDamageTime = 0
+    inst.OnSave = function(inst, data)
+        data.dmg = inst.dmg
+        data.interval = inst.interval
+        data.startDuration = inst.startDuration
+        data.lastDamageTime = inst.lastDamageTime
+    end
+    inst.OnLoad = function(inst, data)
+        if data == nil then return end
+        inst.dmg = data.dmg or inst.dmg
+        inst.interval = data.interval or inst.interval
+        inst.startDuration = data.startDuration or inst.startDuration
+        inst.lastDamageTime = data.lastDamageTime or inst.lastDamageTime
+    end
+end
+fns.poisoned.setup = PoisonedSetup
+
+--------------------------------------------------------------------------
+-- 解毒免疫 debuff：timer 到期自然解除，免疫期间毒素命中按剩余时长吸收（见 TroApplyPoison）
+local function AntitoxinDisplay(inst, target)
+    inst.nameoverride = "buff_antitoxin_tro"
+    if target.player_classified ~= nil then
+        target.player_classified.poisonstate:set(2)
+    end
+    if target.components.medal_showbufftime ~= nil then
+        target.components.medal_showbufftime:SetBuffInfo()
+        if target.replica ~= nil and target.replica.medal_showbufftime ~= nil then
+            target.replica.medal_showbufftime:GetBuffInfo()
+        end
+    end
+end
+
+fns.antitoxin.attach = function(inst, target, followsymbol, followoffset, data)
+    if data ~= nil and data.duration ~= nil then
+        inst.components.timer:StopTimer("buffover")
+        inst.components.timer:StartTimer("buffover", data.duration)
+    end
+    AntitoxinDisplay(inst, target)
+end
+
+fns.antitoxin.extend = function(inst, target, followsymbol, followoffset, data)
+    if data ~= nil and data.duration ~= nil then
+        local left = inst.components.timer:GetTimeLeft("buffover") or 0
+        inst.components.timer:StopTimer("buffover")
+        inst.components.timer:StartTimer("buffover", math.max(left, data.duration))
+    end
+    AntitoxinDisplay(inst, target)
+end
+
+fns.antitoxin.detach = function(inst, target)
+    if target.player_classified ~= nil then
+        target.player_classified.poisonstate:set(0)
+    end
+end
 
 local function OnTimerDone(inst, data)
     if data.name == "buffover" then
@@ -134,7 +309,7 @@ local function MakeBuff(name, duration, priority, prefabs)
 
     local function OnDetached(inst, target, ...)
         if fns[name].detach ~= nil then
-            fns[name].detach(inst, target, ...)
+            fns[name].detach(inst, target)
         end
 
         target:PushEvent("foodbuffdetached", DETACH_BUFF_DATA)
@@ -177,6 +352,10 @@ local function MakeBuff(name, duration, priority, prefabs)
             inst.OnLoad = onload
         end
 
+        if fns[name].setup ~= nil then
+            fns[name].setup(inst)
+        end
+
         return inst
     end
 
@@ -189,8 +368,8 @@ end
 
 -- Make dynamic buffs
 return MakeDynBuff("speedup", 2),
-    MakeDynBuff("poisoned", 1)
-    -- MakeDynBuff("antitoxin", 1)
+    MakeDynBuff("poisoned", 1),
+    MakeDynBuff("antitoxin", 1)
 
 -- Runar: These are here to make this file findable.
 -- buff_speedup_tro

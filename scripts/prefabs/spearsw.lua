@@ -37,21 +37,7 @@ local function onunequip(inst, owner)
 end
 
 local function poisonattack(inst, attacker, target, projectile)
-	if target and target.components.poisonable == nil then
-		target:AddComponent("poisonable")
-	end
-
-	if target and target:HasTag("player") then
-		local corpo = target.components.inventory:GetEquippedItem(EQUIPSLOTS.BODY)
-		local cabeca = target.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD)
-		if corpo and corpo.prefab == "armorseashell" then return end
-		if cabeca and cabeca.prefab == "oxhat" then return end
-	end
-
-
-	target.components.poisonable:SetPoison(-4, 5, 120)
-
-	if target.components.combat then
+	if TroApplyPoison(target, -4, 5, 120) and target.components.combat then
 		target.components.combat:SuggestTarget(attacker)
 	end
 	-- this was commented out as the attack with the spear will do an attacked event. The poison itself doesn't need a second one pushed

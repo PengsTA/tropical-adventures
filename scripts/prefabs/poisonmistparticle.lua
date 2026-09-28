@@ -9,15 +9,11 @@ function dodamageinplayer(inst)
     local alvo2 = GetClosestInstWithTag("insect", inst, 5)
 
     if alvo and alvo.components.health then
-        local gasmask = alvo.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD)
+        local gasmask = alvo.components.inventory ~= nil and alvo.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD) or nil
         if gasmask and gasmask.prefab == "gasmaskhat" then return end
         if gasmask and gasmask.prefab == "gashat" then return end
 
-        if alvo and alvo.components.poisonable == nil then
-            alvo:AddComponent("poisonable")
-        end
-        alvo.components.poisonable:SetPoison(-2, 1, 2)
-        --alvo.components.health:DoDelta(-2, nil, "poison")
+        TroApplyPoison(alvo, -2, 1, 2)
     end
 
     if alvo2 and alvo2.components.health then

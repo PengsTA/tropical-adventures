@@ -39,18 +39,6 @@ local function onthrown(inst, data)
     inst.AnimState:PlayAnimation("speargun")
 end
 
-local function poisonattack(inst, attacker, target)
-    if target.components.poisonable then
-        target.components.poisonable:Poison()
-    end
-    if target.components.combat then
-        target.components.combat:SuggestTarget(attacker)
-    end
-    if target.sg and target.sg.sg.states.hit then
-        target.sg:GoToState("hit")
-    end
-end
-
 local function onfinished(inst)
     inst:Remove()
 end

@@ -5,9 +5,7 @@ local assets =
 }
 
 local function oneat(inst, eater)
-    if eater.components.poisonable ~= nil then
-        eater.components.poisonable:WearOff()
-    end
+    TroRemovePoison(eater)
 end
 
 local function ondeploy(inst, pt)
