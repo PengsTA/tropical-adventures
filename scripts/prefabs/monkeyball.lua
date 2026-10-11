@@ -63,10 +63,6 @@ local function onthrown2(inst, thrower, pt)
 end
 
 local function onhitground(inst)
-	inst.components.finiteuses:Use(1)
-	local map = TheWorld.Map
-	local x, y, z = inst.Transform:GetWorldPosition()
-	local ground = map:GetTile(map:GetTileCoordsAtPoint(x, y, z))
 	inst.Physics:CollidesWith(COLLISION.WORLD)
 	inst.Physics:CollidesWith(COLLISION.OBSTACLES)
 	inst.Physics:CollidesWith(COLLISION.SMALLOBSTACLES)
@@ -74,6 +70,7 @@ local function onhitground(inst)
 	inst.Physics:CollidesWith(COLLISION.GIANTS)
 
 	inst.AnimState:PlayAnimation("idle", true)
+	inst.components.finiteuses:Use(1)
 end
 
 local function oncollision(inst, other)
@@ -88,8 +85,10 @@ local function pop(inst)
 end
 
 local function onfinished(inst)
+	local x, y, z = inst.Transform:GetWorldPosition()
+	local collapse = SpawnPrefab("collapse_small")
+	if collapse ~= nil then collapse.Transform:SetPosition(x, y, z) end
 	inst:Remove()
-	SpawnPrefab("collapse_small").Transform:SetPosition(inst.Transform:GetWorldPosition())
 end
 
 local function fn()

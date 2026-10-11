@@ -9,10 +9,8 @@ local prefabs =
     "collapse_small",
 }
 
-local WOODLEGS_BOATCANNON_DAMAGE = 50
-local BOATCANNON_DAMAGE = 100
-local BOATCANNON_RADIUS = 4
-local BOATCANNON_BUILDINGDAMAGE = 10
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local BOATCANNON_AMMO_COUNT = 15
 
 local function onthrowfn(inst)
@@ -25,9 +23,12 @@ local function canshootfn(inst, pt)
     return inst.components.equippable:IsEquipped()
 end
 
-local function retirado(inst)
-    if inst.navio then inst.navio.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
-    inst.navio = nil
+local function DetachFromBoat(inst)
+    local boat = BoatEquip.GetItemBoat(inst)
+    if boat ~= nil then
+        boat.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol)
+    end
+    BoatEquip.ClearItemBoatState(inst)
 end
 
 local function onfinished(inst)
@@ -35,8 +36,6 @@ local function onfinished(inst)
 end
 
 local function fn(Sim)
-    --NOTE!! Most of the logic for this happens in cannonshot.lua
-
     local inst = CreateEntity()
     inst.entity:AddTransform()
     inst.entity:AddAnimState()
@@ -47,12 +46,9 @@ local function fn(Sim)
     inst.AnimState:PlayAnimation("idle")
 
     MakeInventoryPhysics(inst)
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
     inst.build = "swap_cannon"
     inst.symbol = "swap_cannon"
-    inst.symboltooverride = "swap_lantern" --swap_lantern_off
-    inst.navio = nil
-
+    inst.symboltooverride = "swap_lantern"
     inst:AddTag("cannon")
     inst:AddTag("sw_boatcannon")
     MakeInventoryFloatable(inst)
@@ -65,14 +61,9 @@ local function fn(Sim)
 
     inst:AddComponent("inspectable")
     inst:AddComponent("inventoryitem")
-
-
-
-    --    inst:AddComponent("equippable")
-    --    inst.components.equippable.boatequipslot = BOATEQUIPSLOTS.BOAT_LAMP
-    --    inst.components.equippable.equipslot = nil
-    --    inst.components.equippable:SetOnEquip( onequip )
-    --    inst.components.equippable:SetOnUnequip( onunequip )
+    inst:AddComponent("equippable")
+    inst.components.equippable.boatequipslot = BOATEQUIPSLOTS.BOAT_LAMP
+    inst.components.equippable.restrictedtag = "ta_boat_equipment"
 
     inst:AddComponent("finiteuses")
     inst.components.finiteuses:SetMaxUses(BOATCANNON_AMMO_COUNT)
@@ -90,7 +81,7 @@ local function fn(Sim)
     inst.components.thrower.throwable_prefab = "cannonshot"
     inst.components.thrower.onthrowfn = onthrowfn
     inst.components.thrower.canthrowatpointfn = canshootfn
-    inst:ListenForEvent("onpickup", retirado)
+    inst:ListenForEvent("onpickup", DetachFromBoat)
 
     return inst
 end

@@ -1,3 +1,4 @@
+local ExplosionDamage = require("tools/explosion_damage")
 local assets =
 {
 	Asset("ANIM", "anim/whale_carcass.zip"),
@@ -190,7 +191,7 @@ growth_stages =
 				inst.SoundEmitter:PlaySound(inst.sounds.explosion)
 
 				inst:DoTaskInTime(57 * FRAMES, function(inst)
-					--					inst.components.explosive:OnBurnt()
+					ExplosionDamage.Apply(inst, inst.explosiondamage, 3)
 				end)
 
 				inst:DoTaskInTime(58 * FRAMES, function(inst)
@@ -283,7 +284,7 @@ local function bluefn(Sim)
 
 	inst.components.workable:SetWorkLeft(WHALE_BLUE_EXPLOSION_HACKS)
 	inst.components.workable:SetWorkable(false)
-	--	inst.components.explosive.explosivedamage = WHALE_BLUE_EXPLOSION_DAMAGE
+	inst.explosiondamage = WHALE_BLUE_EXPLOSION_DAMAGE
 	return inst
 end
 
@@ -340,7 +341,7 @@ local function whitefn(Sim)
 
 	inst.components.workable:SetWorkLeft(WHALE_WHITE_EXPLOSION_HACKS)
 	inst.components.workable:SetWorkable(false)
-	--	inst.components.explosive.explosivedamage = WHALE_WHITE_EXPLOSION_DAMAGE
+	inst.explosiondamage = WHALE_WHITE_EXPLOSION_DAMAGE
 
 	return inst
 end

@@ -1,4 +1,5 @@
 local Utils = require("tools/utils")
+local RegionDefs = require("tools/regiondefs")
 
 --限制制作的配方
 -- local banrecipe = { "hua_player_house_recipe", "homesign", "townportal", "telebase", "hua_player_house1_recipe",
@@ -24,42 +25,44 @@ local Utils = require("tools/utils")
 -----------以下来自猪人部落-------------
 local StopAmbientRainSound, StopTreeRainSound, StopUmbrellaRainSound, StopBarrierSound
 local _rainfx, _snowfx, _lunarhailfx, _pollenfx
+local _last_interior = false
 local function WeatherClientOnUpdateBefore()
     if not ThePlayer then return end
 
     -- 只在客机执行，这里只改本地玩家视觉效果，实际效果在其他地方修改
-    if ThePlayer:IsInHamRoom() then
-        -- if StopAmbientRainSound then
-        --     StopAmbientRainSound()
-        -- end
-        -- if StopTreeRainSound then
-        --     StopTreeRainSound()
-        -- end
-        -- if StopUmbrellaRainSound then
-        --     StopUmbrellaRainSound()
-        -- end
-        -- if StopBarrierSound then
-        --     StopBarrierSound()
-        -- end
-
-        if _rainfx then
-            _rainfx.particles_per_tick = 0
-            _rainfx.splashes_per_tick = 0
+    local is_interior = ThePlayer:HasTag(RegionDefs.INTERIOR_TAG)
+    if is_interior == _last_interior then
+        if is_interior then
+            return nil, true
         end
-        if _lunarhailfx then
-            _lunarhailfx.particles_per_tick = 0
-            _lunarhailfx.splashes_per_tick = 0
-        end
-        if _snowfx then
-            _snowfx.particles_per_tick = 0
-        end
-
-        if _pollenfx then
-            _pollenfx.particles_per_tick = 0
-        end
-
-        return nil, true
+        return
     end
+    _last_interior = is_interior
+    if not is_interior then
+        return
+    end
+
+    if StopAmbientRainSound then StopAmbientRainSound() end
+    if StopTreeRainSound then StopTreeRainSound() end
+    if StopUmbrellaRainSound then StopUmbrellaRainSound() end
+    if StopBarrierSound then StopBarrierSound() end
+
+    if _rainfx then
+        _rainfx.particles_per_tick = 0
+        _rainfx.splashes_per_tick = 0
+    end
+    if _lunarhailfx then
+        _lunarhailfx.particles_per_tick = 0
+        _lunarhailfx.splashes_per_tick = 0
+    end
+    if _snowfx then
+        _snowfx.particles_per_tick = 0
+    end
+    if _pollenfx then
+        _pollenfx.particles_per_tick = 0
+    end
+
+    return nil, true
 end
 
 local _hasfx = not TheNet:IsDedicated()
@@ -84,12 +87,12 @@ end)
 
 --懒得找防寒隔热的组件了，直接覆盖onupdate更省事
 local function OnTemperatureUpdateBefore(self)
-    if self.inst:IsInHamRoom() then
-        local cur = self:GetCurrent()
-        if cur > 30 then
-            self:SetTemperature(self.current - 0.1)
-        elseif cur < 20 then
-            self:SetTemperature(self.current + 0.1)
+    local regionaware = self.inst.components.regionaware
+    if regionaware ~= nil and regionaware:IsInInterior() then
+        local current_temperature = self:GetCurrent()
+        local adjustment = current_temperature > 30 and -0.1 or (current_temperature < 20 and 0.1 or 0)
+        if adjustment ~= 0 then
+            self:SetTemperature(self.current + adjustment)
         end
 
         return nil, true
@@ -97,9 +100,11 @@ local function OnTemperatureUpdateBefore(self)
 end
 
 local function OnMoistureUpdateBefore(self)
-    if self.inst:IsInHamRoom() then
-        if self.moisture > 0 then
-            self:DoDelta(-0.1)
+    local regionaware = self.inst.components.regionaware
+    if regionaware ~= nil and regionaware:IsInInterior() then
+        local adjustment = self.moisture > 0 and -0.1 or 0
+        if adjustment ~= 0 then
+            self:DoDelta(adjustment)
         end
         return nil, true
     end
@@ -108,7 +113,7 @@ end
 -- PlayFootstep函数使用，我需要玩家在室内走路时有声音，但是因为没有地皮，只能覆盖函数，这里使用木板地皮的声音
 local function GetCurrentTileTypeBefore(inst)
     local x, y, z = inst.Transform:GetWorldPosition()
-    if TheWorld.Map:IsHamRoomAtPoint(x, 0, z) then
+    if TheWorld.Map:IsInteriorAtPoint(x, 0, z) then
         return { WORLD_TILES.WOODFLOOR, GetTileInfo(WORLD_TILES.WOODFLOOR) }, true
     end
 end
@@ -127,7 +132,6 @@ AddPrefabPostInit("world", function(inst)
     if not TheWorld.ismastersim then
         return
     end
-    inst:AddComponent("getposition_hamroom")
 end)
 
 
@@ -308,7 +312,7 @@ end)
 AddComponentPostInit("birdspawner", function(self)
     local old_GetSpawnPoint = self.GetSpawnPoint
     function self:GetSpawnPoint(pt)
-        if TheWorld.Map:IsHamRoomAtPoint(pt:Get()) then
+        if TheWorld.Map:IsInteriorAtPoint(pt:Get()) then
             return nil
         end
         return old_GetSpawnPoint(self, pt)
@@ -323,7 +327,7 @@ AddComponentPostInit("witherable", function(self)
     if self.inst then
         self.inst:DoTaskInTime(0.1, function(crop)
             local x, y, z = crop.Transform:GetWorldPosition()
-            if TheWorld.Map:IsHamRoomAtPoint(x, y, z) then
+            if TheWorld.Map:IsInteriorAtPoint(x, y, z) then
                 self:Enable(false)
                 -- print("是否枯萎",crop.prefab)
             end

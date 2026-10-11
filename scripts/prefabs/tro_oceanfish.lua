@@ -152,6 +152,25 @@ local function OnMakeProjectile(inst)
 	return inst
 end
 
+local function OnTrawl(inst)
+    if inst.fish_def == nil then
+        return nil
+    end
+
+    local fish = SpawnPrefab(inst.fish_def.prefab .. "_inv")
+    if fish == nil then
+        return nil
+    end
+
+    fish.Transform:SetPosition(inst.Transform:GetWorldPosition())
+    fish.Transform:SetRotation(inst.Transform:GetRotation())
+    if inst.components.weighable ~= nil and fish.components.weighable ~= nil then
+        fish.components.weighable:CopyWeighable(inst.components.weighable)
+    end
+    inst:Remove()
+    return fish
+end
+
 local function OnTimerDone(inst, data)
 	if data ~= nil and data.name == "lifespan" then
 		if inst.components.oceanfishable:GetRod() == nil then
@@ -346,6 +365,10 @@ local function water_common(data)
 	inst.components.oceanfishable:StrugglingSetup(inst.components.locomotor.walkspeed, inst.components.locomotor
 		.runspeed, data.stamina or TUNING.OCEANFISH.FISHABLE_STAMINA)
 	inst.components.oceanfishable.catch_distance = TUNING.OCEAN_FISHING.FISHING_CATCH_DIST
+
+	inst:AddComponent("trawlable")
+	inst.components.trawlable:SetIgnoreVisibility(true)
+	inst.components.trawlable:SetTrawlFn(OnTrawl)
 
 	inst:AddComponent("eater")
 	if data and data.diet then

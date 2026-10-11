@@ -23,7 +23,11 @@ if true then
     end)
 
     AddRoomPreInit("OceanRough", function(room)
-        room.required_prefabs = {}
+        if ta_worldgen.ocean_content == false then
+            tableutil.remove_components(room.required_prefabs, {
+                "hermithouse_construction1", "monkeyqueen", "oceanwhirlbigportal",
+            })
+        end
         tableutil.remove_indexes(room.contents.countstaticlayouts, {
             "HermitcrabIsland",
             "MonkeyIsland",
@@ -193,22 +197,28 @@ end
 
 if ta_worldgen.cave_content == "part" then
     AddLevelPreInitAny(function(level)
-        if level.location == "caves" then
-            tableutil.remove_components(
-                level.tasks,
-                {
-                    "CaveExitTask1",
-                    "CaveExitTask2",
-                    "CaveExitTask3",
-                    "CaveExitTask4",
-                    "CaveExitTask5",
-                    "CaveExitTask6",
-                    "CaveExitTask7",
-                    "CaveExitTask8",
-                    "CaveExitTask9",
-                    "CaveExitTask10",
-                }
-            )
+        if level.location == "cave" then
+            local exit_tasks = {
+                "CaveExitTask1",
+                "CaveExitTask2",
+                "CaveExitTask3",
+                "CaveExitTask4",
+                "CaveExitTask5",
+                "CaveExitTask6",
+                "CaveExitTask7",
+                "CaveExitTask8",
+                "CaveExitTask9",
+                "CaveExitTask10",
+            }
+            tableutil.remove_components(level.tasks, exit_tasks)
+            tableutil.remove_components(level.optionaltasks, exit_tasks)
+            tableutil.remove_components(level.valid_start_tasks, exit_tasks)
+            if level.valid_start_tasks ~= nil and #level.valid_start_tasks == 0 then
+                level.valid_start_tasks = nil
+            end
+            if level.optionaltasks ~= nil and level.numoptionaltasks ~= nil then
+                level.numoptionaltasks = math.min(level.numoptionaltasks, #level.optionaltasks)
+            end
         end
     end)
 end
@@ -231,7 +241,7 @@ if ta_worldgen.shipwrecked then
 
             table.insert(level.tasks, "BeachMarshy")     --纯随机 沙滩和沼泽
             table.insert(level.tasks, "MoonRocky")       --月石矿
-            table.insert(level.tasks, "TigerSharky")     --虎鲨+沼泽+丛林   required_prefabs = { "tigersharkpool" },好奇怪
+            table.insert(level.tasks, "TigerSharky")     -- Tiger shark island.
             table.insert(level.tasks, "Verdent")         --绿草地  ["Beaverkinghome"] = 1,    ["Beaverkingcity"] = 1, beaver是什么东西
             table.insert(level.tasks, "Casino")          --["BeachPalmCasino"] = 1, 抽奖机
             table.insert(level.tasks, "BeachBeachy")     --随机  [salasbeach[math.random(1, 24)]] = 1,  ["BeachShark"] = 1,又是啥玩意
@@ -254,14 +264,16 @@ if ta_worldgen.shipwrecked then
             table.insert(level.tasks, "A_BLANK11")
             table.insert(level.tasks, "A_BLANK12")
 
-            table.insert(level.ocean_population, "OceanBrinepool")
+            level.ocean_population = tableutil.insert_components(level.ocean_population, {
+                "OceanBrinepool",
+            })
             level.required_prefabs = tableutil.insert_components(
                 level.required_prefabs,
                 {
                     "packim_fishbone",
-                    "tigersharkpool", --"sharkittenspawner",
+                    "tigershark_spawnpoint",
                     "slipstor",
-                    "octopusking",    --为什么会出现两个呢
+                    "octopusking",
                     "mermhouse_fisher",
                     "doydoy",
                     "doydoy",
@@ -334,6 +346,8 @@ if ta_worldgen.ruins then
             table.insert(level.tasks, "HamMudCave")    --同质化严重  "HamMudWithRabbitexit" 有exit2
             table.insert(level.tasks, "HamBigBatCave") ----exit3
             table.insert(level.tasks, "HamArchiveMaze")
+            table.insert(level.tasks, "TaHamRuinsOutskirts")
+            table.insert(level.tasks, "TaHamRuinsLabyrinth")
         end
     end)
 end

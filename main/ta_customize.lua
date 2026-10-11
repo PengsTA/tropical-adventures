@@ -5,9 +5,14 @@ local function en_zh(en, zh)
 end
 
 local LEVELCATEGORY = LEVELCATEGORY
-local customize_dat = require("datadefs/customization")
+local customize_dat = require("datadefs/ta_customization")(modinfo.ta_world_options)
 local worldgen_customization = customize_dat.worldgen_options
 local climate_customization = customize_dat.climate_options
+
+-- Adding customization items immediately rebuilds existing world menus.
+if not rawget(_G, "WorldSim") and not TheNet:IsDedicated() then
+    modimport "main/ta_config_frontend"
+end
 
 local ta_customize_table = {
     ta_worldgen = {

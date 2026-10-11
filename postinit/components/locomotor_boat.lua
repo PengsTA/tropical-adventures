@@ -11,6 +11,8 @@ local speed_bonus = {
     -- more entries here
 }
 
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local sail_bonus = {
     sail = 1.2,
     clothsail = 1.3,
@@ -18,27 +20,27 @@ local sail_bonus = {
     feathersail = 1.4,
     ironwind = 1.5,
     woodlegssail = 1.01,
-    trawlnet = 0.8,
+    trawlnet = 0.75,
     malbatrossail = 1.5,
     -- more entries here
 }
 
+local function GetBoatSpeedAdjustment(boat, sail)
+    local boatbonus = speed_bonus[boat.prefab] or 1
+    local sailbonus = sail and (sail.sail_speed_mult ~= nil and 1 + sail.sail_speed_mult or sail_bonus[sail.prefab]) or 1
+    local adjustment = math.min(boatbonus * sailbonus - 1, 1)
+    return sail ~= nil and sail:HasTag("trawlnet") and adjustment or math.max(adjustment, 0)
+end
+
 local function getspeedbonus(inst)
-    local val = 1
-    if inst.replica.inventory then
-        local item = inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.BARCO)
-        if item then
-            local bonus = speed_bonus[item.prefab] or 1
-            if item.replica.container then
-                local sail = item.replica.container:GetItemInSlot(1)
-                local sailbonus = sail and sail_bonus[sail.prefab] or 1
-                val = bonus * sailbonus
-            else
-                val = bonus
-            end
+    if inst.replica.sailor ~= nil then
+        local boat = inst.replica.sailor:GetBoat()
+        if boat ~= nil then
+            local sail = BoatEquip.GetSail(BoatEquip.GetBoatContainer(boat))
+            return GetBoatSpeedAdjustment(boat, sail)
         end
     end
-    return math.max(math.min(val - 1, 1), 0)
+    return 0
 end
 
 --------------------这里控制水上的速度-------------------------
@@ -54,9 +56,8 @@ AddComponentPostInit("locomotor", function(self)
 
     local OldStartHopping = self.StartHopping
     function self:StartHopping(x, z, target_platform)
-        if self.inst:HasTag("aquatic") and self.inst.components.driver then
-            self.inst.components.driver:BoatDetached(self.inst)
-            self.inst:RemoveTag("aquatic")
+        if self.inst.components.sailor ~= nil and self.inst.components.sailor:IsSailing() then
+            self.inst.components.sailor:Disembark(nil, true)
         end
         OldStartHopping(self, x, z, target_platform)
     end

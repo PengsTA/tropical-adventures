@@ -9,6 +9,7 @@ This assumes the bird already has a build, inventory icon, sounds and a feather_
 ]] --
 require "brains/birdbrain"
 require "stategraphs/SGbird"
+local ClimateProfiles = require("tools/climateprofiles")
 
 local toucan_hamlet_sounds = {
     takeoff = "dontstarve_DLC002/creatures/toucan/takeoff",
@@ -77,7 +78,7 @@ end
 
 local function seedspawntest(inst)
 	local ground = TheWorld
-	local isWinter = TheWorld.state.iswinter
+	local isWinter = ClimateProfiles.IsHamletHumid(TheWorld.state)
 	if ground and ground.components.birdspawner then
 		local x, y, z = inst.Transform:GetWorldPosition()
 		local ground = TheWorld

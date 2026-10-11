@@ -26,6 +26,8 @@ local loot =
 }
 
 local SEA_YARD_MAX_FUEL_TIME = 30 * 16
+local SEA_YARD_REPAIR_RANGE = 5
+local SEA_YARD_REPAIR_PER_SECOND = .7
 
 local function onturnon(inst)
 	if not inst:HasTag("burnt") then
@@ -44,108 +46,84 @@ local function onturnoff(inst)
 	end
 end
 
-local function startTimer(inst, user)
-	if user then
-		inst.task_fix = inst:DoTaskInTime(1, function()
-			if user.armsfx then
-				inst.fixfn(inst, user)
+local function NeedsRepair(target)
+	return target ~= nil
+		and target:IsValid()
+		and target.components.boathealth ~= nil
+		and not target.components.boathealth:IsFull()
+end
+
+local function FindRepairTarget(inst)
+	local x, y, z = inst.Transform:GetWorldPosition()
+	local closest, closest_dist_sq = nil, math.huge
+	for _, boat in ipairs(TheSim:FindEntities(x, y, z, SEA_YARD_REPAIR_RANGE, { "boatsw" }, { "INLIMBO" })) do
+		if NeedsRepair(boat) then
+			local dist_sq = inst:GetDistanceSqToInst(boat)
+			if dist_sq < closest_dist_sq then
+				closest = boat
+				closest_dist_sq = dist_sq
 			end
-		end)
+		end
+	end
+	return closest
+end
+
+local function StopRepairing(inst)
+	local was_repairing = inst.repair_target ~= nil or inst.armsfx ~= nil or inst.components.fueled.consuming
+	inst.repair_target = nil
+	inst.components.fueled:StopConsuming()
+	if inst.armsfx ~= nil then
+		if inst.armsfx:IsValid() then
+			inst.armsfx.stopfx(inst.armsfx)
+		end
+		inst.armsfx = nil
+	end
+	if was_repairing then
+		onturnoff(inst)
 	end
 end
 
-local function startFixingFn(inst, user)
-	if user and user.components.driver and user.components.driver.vehicle and
-		user.components.driver.vehicle.components.finiteuses and
-		user.components.driver.vehicle.components.finiteuses.current < user.components.driver.vehicle.components.finiteuses.total - 1 then
-		if not user.armsfx then
-			local arms = SpawnPrefab("sea_yard_arms_fx")
-			arms.entity:SetParent(user.entity)
+local function StartRepairing(inst, boat)
+	inst.repair_target = boat
+	inst.components.fueled:StartConsuming()
+	onturnon(inst)
+
+	if inst.armsfx == nil then
+		local arms = SpawnPrefab("sea_yard_arms_fx")
+		if arms ~= nil then
+			arms.entity:SetParent(boat.entity)
 			arms.Transform:SetPosition(0, 0, 0)
 			arms.AnimState:SetFinalOffset(5)
-
-			user.armsfx = arms
-			inst.components.fueled:StartConsuming()
-			onturnon(inst)
-			inst.user = user
-		end
-		startTimer(inst, user)
-	elseif user and user.components.finiteuses and user.components.finiteuses.current < user.components.finiteuses.total - 1 then
-		if not user.armsfx then
-			local arms = SpawnPrefab("sea_yard_arms_fx")
-			arms.entity:SetParent(user.entity)
-			arms.Transform:SetPosition(0, 0, 0)
-			arms.AnimState:SetFinalOffset(5)
-
-			user.armsfx = arms
-			inst.components.fueled:StartConsuming()
-			onturnon(inst)
-			inst.user = user
-		end
-		startTimer(inst, user)
-	end
-end
-
-local function stopFixingFn(inst, user)
-	local pt = inst:GetPosition()
-	local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 10, { "player" })
-	for k, user in pairs(ents) do
-		if not user and inst.user then
-			user = inst.user
-			inst.user = nil
-		end
-		inst.components.fueled:StopConsuming()
-		if inst.task_fix then
-			inst.task_fix:Cancel()
-		end
-		if user and user.armsfx then
-			onturnoff(inst)
-			user.armsfx.stopfx(user.armsfx, user)
-		end
-	end
-
-	local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 10, { "boatsw" })
-	for k, user in pairs(ents) do
-		if not user and inst.user then
-			user = inst.user
-			inst.user = nil
-		end
-		inst.components.fueled:StopConsuming()
-		if inst.task_fix then
-			inst.task_fix:Cancel()
-		end
-		if user and user.armsfx then
-			onturnoff(inst)
-			user.armsfx.stopfx(user.armsfx, user)
+			inst.armsfx = arms
 		end
 	end
 end
 
-local function fixfn(inst, user)
-	if user and user.components.driver and user.components.driver.vehicle and user.components.driver.vehicle.components.finiteuses then
-		if user.components.driver.vehicle.components.finiteuses.current >= user.components.driver.vehicle.components.finiteuses.total - 0.4 then
-			stopFixingFn(inst, user)
-		end
-		if user.components.driver and user.components.driver.vehicle and user.components.driver.vehicle.components.finiteuses ~= nil then
-			local boat = user.components.driver.vehicle
-			boat.components.finiteuses.current = boat.components.finiteuses.current + 0.7
-			boat.components.finiteuses:Use(0)
-			boat.components.armor.condition = boat.components.finiteuses.current
-		end
-
-
-		---------repara apenas o barco sem jogador---------------------------
-	elseif user and user.components.finiteuses then
-		if user.components.finiteuses.current >= user.components.finiteuses.total - 0.4 then stopFixingFn(inst, user) end
-		if user.components.finiteuses ~= nil then
-			user.components.finiteuses.current = user.components.finiteuses.current + 0.7
-			user.components.finiteuses:Use(0)
-			user.components.armor.condition = user.components.finiteuses.current
-		end
+local function UpdateRepairing(inst)
+	if inst.components.fueled:IsEmpty() then
+		StopRepairing(inst)
+		return
 	end
+
+	local target = inst.repair_target
+	if not NeedsRepair(target) or inst:GetDistanceSqToInst(target) > SEA_YARD_REPAIR_RANGE * SEA_YARD_REPAIR_RANGE then
+		local next_target = FindRepairTarget(inst)
+		if next_target == nil then
+			StopRepairing(inst)
+			return
+		end
+		if next_target ~= target then
+			StopRepairing(inst)
+			StartRepairing(inst, next_target)
+		end
+		target = next_target
+	end
+
+	target.components.boathealth:DoDelta(SEA_YARD_REPAIR_PER_SECOND, "repair", inst)
 end
 
 local function onhammered(inst, worker)
+	StopRepairing(inst)
 	if inst:HasTag("fire") and inst.components.burnable then
 		inst.components.burnable:Extinguish()
 	end
@@ -208,7 +186,7 @@ local function OnFuelSectionChange(old, new, inst)
 end
 
 local function OnFuelEmpty(inst)
-	stopFixingFn(inst)
+	StopRepairing(inst)
 end
 
 local function ontakefuelfn(inst)
@@ -255,21 +233,6 @@ local function getstatus(inst, viewer)
 end
 
 
-local function reparo(inst)
-	local user = GetClosestInstWithTag("player", inst, 5)
-	local barco = GetClosestInstWithTag("boatsw", inst, 5)
-
-	if user and inst.components.fueled.currentfuel > 0 then
-		if inst.user and inst.user ~= user then stopFixingFn(inst) end
-		startFixingFn(inst, user)
-	elseif barco and inst.components.fueled.currentfuel > 0 then
-		if inst.user and inst.user ~= barco then stopFixingFn(inst) end
-		startFixingFn(inst, barco)
-	else
-		stopFixingFn(inst)
-	end
-end
-
 local function fn(Sim)
 	local inst = CreateEntity()
 	local trans = inst.entity:AddTransform()
@@ -313,8 +276,8 @@ local function fn(Sim)
 	-- inst.components.fueled.fueltype = "TAR"
 
 	--	inst:AddComponent("machine")
-	--	inst.components.machine.turnonfn = startFixingFn
-	--	inst.components.machine.turnofffn = stopFixingFn
+	--	inst.components.machine.turnonfn = StartRepairing
+	--	inst.components.machine.turnofffn = StopRepairing
 	--	inst.components.machine.caninteractfn = CanInteract
 	--	inst.components.machine.cooldowntime = 0.5
 
@@ -341,9 +304,9 @@ local function fn(Sim)
 
 	inst.OnSave = onsave
 	inst.OnLoad = onload
-	inst.fixfn = fixfn
+	inst.OnRemoveEntity = StopRepairing
 	inst:DoTaskInTime(0, ontakefuelfn)
-	inst:DoPeriodicTask(0.5, reparo)
+	inst:DoPeriodicTask(1, UpdateRepairing)
 
 	return inst
 end

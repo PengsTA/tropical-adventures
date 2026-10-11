@@ -14,8 +14,9 @@ local respawndays = 5
 local function setbroken(inst)
     inst.AnimState:PlayAnimation("broken")
     inst.broken = true
+    inst:RemoveTag("blocker")
+    RemovePhysicsColliders(inst)
     inst.Physics:SetActive(false)
-    inst.Physics:SetSphere(0)
     inst.Physics:Stop()
 
     if inst.MiniMapEntity then
@@ -81,7 +82,6 @@ local function fn(Sim)
     local minimap = inst.entity:AddMiniMapEntity()
     minimap:SetIcon("pig_ruins_pot.tex")
 
-    inst.entity:AddPhysics()
     MakeObstaclePhysics(inst, .25)
 
     inst.entity:AddSoundEmitter()

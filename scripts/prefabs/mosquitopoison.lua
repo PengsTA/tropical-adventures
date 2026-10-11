@@ -9,7 +9,7 @@ local prefabs =
     "venomgland",
 }
 
-local brain = require("brains/mosquitobrain")
+local brain = require("brains/mosquitopoisonbrain")
 
 local sounds =
 {

@@ -17,6 +17,9 @@ local function onsave(inst, data)
     if inst:HasTag("localtrap") then
         data.localtrap = true
     end
+    if inst:HasTag("ta_cave_beam") then
+        data.ta_cave_beam = true
+    end
 end
 
 local function onload(inst, data)
@@ -26,6 +29,9 @@ local function onload(inst, data)
         end
         if data.localtrap then
             inst:AddTag("localtrap")
+        end
+        if data.ta_cave_beam then
+            inst:AddTag("ta_cave_beam")
         end
     end
 end
@@ -37,16 +43,31 @@ local function trigger(inst)
     end
 
     local pt = Vector3(inst.Transform:GetWorldPosition())
-    local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, range, { "dartthrower" }, { "INTERIOR_LIMBO" })
+    local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, range, { "dartthrower" }, { "INTERIOR_LIMBO", "ta_cave_ruins_trap" })
     for i, ent in ipairs(ents) do
         if ent.shoot then
             ent.shoot(ent)
         end
     end
 
-    ents = TheSim:FindEntities(pt.x, pt.y, pt.z, range, { "spear_trap" }, { "INTERIOR_LIMBO" })
+    ents = TheSim:FindEntities(pt.x, pt.y, pt.z, range, { "spear_trap" }, { "INTERIOR_LIMBO", "ta_cave_ruins_trap" })
     for i, ent in ipairs(ents) do
         ent:PushEvent("triggertrap")
+    end
+
+    if inst:HasTag("ta_cave_beam") then
+        local cave_ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 8, { "ta_cave_ruins_trap" }, { "INLIMBO" })
+        for _, ent in ipairs(cave_ents) do
+            if not ent._ruins_owner then
+                if ent.TriggerBurst then
+                    ent:TriggerBurst()
+                elseif ent.components.autodartthrower then
+                    ent.components.autodartthrower:TurnOn()
+                elseif ent:HasTag("spear_trap") then
+                    ent:PushEvent("triggertrap")
+                end
+            end
+        end
     end
 end
 

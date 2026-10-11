@@ -1,25 +1,15 @@
 local Utils = require("tools/utils")
+local RegionDefs = require("tools/regiondefs")
 
 --温度变化更加丝滑
 local function OnTemperatureUpdateBefore(self)
-    if self.inst:AwareInVolcanoArea() then
-        local volcano_tem = 40
-        self:SetModifier("volcanoregion", volcano_tem)
-
-        return nil, false
+    local climate = self.inst.components.regionalclimate
+    local modifier = climate ~= nil and climate:GetTemperatureModifier() or nil
+    if modifier ~= nil then
+        self:SetModifier("regionalclimate", modifier)
     else
-        self:RemoveModifier("volcanoregion")
+        self:RemoveModifier("regionalclimate")
     end
-
-
-    if self.inst:AwareInTropicalArea() then
-        local tro_tem = math.max(10 - TheWorld.state.temperature, 0) + 5
-        self:SetModifier("tropicalregion", tro_tem)
-    else
-        self:RemoveModifier("tropicalregion")
-    end
-
-
 
     return nil, false
 end
@@ -43,8 +33,69 @@ end)
 
 
 local Moisture = require("components/moisture")
+
+local function GetGlobalPrecipitationRate()
+    return (TheWorld.state.israining or TheWorld.state.issnowing)
+        and math.max(0, TheWorld.state.precipitationrate or 0)
+        or 0
+end
+
+local function GetRegionalPrecipitationRate(inst)
+    if TheWorld == nil or TheWorld.Map == nil or inst.Transform == nil then
+        return nil
+    end
+
+    local x, _, z = inst.Transform:GetWorldPosition()
+    local map = TheWorld.Map
+    -- Regional climates never rain through an interior. Returning a concrete
+    -- zero also prevents the coincident DST weather clock from wetting Hamlet
+    -- rooms or Volcano.
+    if map:IsInteriorAtPoint(x, 0, z) then
+        return 0
+    end
+
+    local primary = map:GetPrimaryRegionAtPoint(x, 0, z)
+    if primary == "dst" then
+        return nil
+    end
+
+    local subregion = map:GetSubregionAtPoint(x, 0, z)
+    if primary == "shipwrecked" then
+        if subregion ~= RegionDefs.GetSubregionName(RegionDefs.SUBREGION.sw_vanilla) then
+            return 0
+        end
+        return GetGlobalPrecipitationRate()
+    end
+
+    if primary == "hamlet" then
+        return GetGlobalPrecipitationRate()
+    end
+
+    return nil
+end
 function Moisture:GetMoistureRate()
-    if not TheWorld.state.israining and not (TheWorld.state.issnowing and self.inst:AwareInTropicalArea()) then
+    local floodmanager = TheWorld.components.floodmanager
+    if floodmanager ~= nil and self.inst.Transform ~= nil then
+        local x, _, z = self.inst.Transform:GetWorldPosition()
+        local driving = self.inst.components.driver ~= nil
+            and self.inst.components.driver.GetIsDriving ~= nil
+            and self.inst.components.driver:GetIsDriving()
+        if not driving and floodmanager:IsFloodedAtPoint(x, z) then
+            return 1 - self:GetWaterproofness()
+        end
+    end
+
+    local climate = self.inst.components.regionalclimate
+    local regional_rate = climate ~= nil
+        and climate:GetPrecipitationRate()
+        or GetRegionalPrecipitationRate(self.inst)
+    if regional_rate ~= nil then
+        return regional_rate > 0
+            and self:_GetMoistureRateAssumingRain() * regional_rate
+            or -0.005
+    end
+
+    if not TheWorld.state.israining then
         return -0.005 ---没搞懂为什么冬天不会自然干燥
     end
 

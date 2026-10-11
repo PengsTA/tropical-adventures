@@ -4,11 +4,6 @@ local assets =
     Asset("ANIM", "anim/torso_amulets.zip"),
 }
 
---[[ Each amulet has a seperate onequip and onunequip function so we can also
-add and remove event listeners, or start/stop update functions here. ]]
-
----RED
-
 local function onequip(inst, owner)
     owner.AnimState:OverrideSymbol("swap_body", "pheromone_stone", "blueamulet")
     owner:AddTag("antlingual")
@@ -19,7 +14,7 @@ local function onunequip(inst, owner)
     owner:RemoveTag("antlingual")
 end
 
-local function makefn(inst)
+local function makefn()
     local inst = CreateEntity()
     inst.entity:AddNetwork()
     inst.entity:AddTransform()

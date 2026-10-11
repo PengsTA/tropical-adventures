@@ -27,6 +27,65 @@ local REEL_SPEED_HIGH           = 2.25
 
 local UNREEL_RATE               = .5
 
+local SCHOOL_REGROUP_TIMER      = "school_regroup"
+local SCHOOL_REFRESH_TIMER      = "school_refresh"
+local SetDepleted
+
+local function OnPlayerNear(inst)
+	if inst.components.timer:TimerExists(SCHOOL_REGROUP_TIMER)
+		or inst.components.oceanfishable:GetRod() ~= nil then
+		return
+	end
+
+	local season = TheWorld.state.season
+	local delay = TUNING.TOTAL_DAY_TIME * (season == "winter" and 3 or season == "spring" and 0.5 or 1)
+	inst.components.timer:StartTimer(SCHOOL_REGROUP_TIMER, delay)
+	inst.AnimState:PlayAnimation("idle_pst_full")
+	inst.AnimState:PushAnimation("idle_loop_gone", true)
+	inst.MiniMapEntity:SetEnabled(false)
+	inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/fish_scatter")
+end
+
+local function OnSchoolTimerDone(inst, data)
+	if data.name == SCHOOL_REFRESH_TIMER then
+		inst._refreshschool(inst)
+	elseif data.name == SCHOOL_REGROUP_TIMER
+		and (inst.AnimState:IsCurrentAnimation("idle_loop_gone")
+			or inst.AnimState:IsCurrentAnimation("idle_pst_full")) then
+		inst.AnimState:PlayAnimation("idle_pre_full")
+		inst.AnimState:PushAnimation("idle_loop_full", true)
+		inst.MiniMapEntity:SetEnabled(true)
+	end
+end
+
+local function OnLoad(inst)
+	if inst.components.timer:TimerExists(SCHOOL_REFRESH_TIMER) then
+		SetDepleted(inst)
+	elseif inst.components.timer:TimerExists(SCHOOL_REGROUP_TIMER) then
+		inst.AnimState:PlayAnimation("idle_loop_gone", true)
+		inst.MiniMapEntity:SetEnabled(false)
+	end
+end
+
+local function SetupSchoolScattering(inst, refreshfn)
+	inst._refreshschool = refreshfn
+	inst:AddComponent("timer")
+	inst:ListenForEvent("timerdone", OnSchoolTimerDone)
+
+	inst:AddComponent("playerprox")
+	inst.components.playerprox:SetDist(3.5, 4)
+	inst.components.playerprox:SetPlayerAliveMode(true)
+	inst.components.playerprox:SetOnPlayerNear(OnPlayerNear)
+	inst.OnLoad = OnLoad
+end
+
+local function StopSchoolScattering(inst)
+	inst.components.timer:StopTimer(SCHOOL_REGROUP_TIMER)
+	if inst.components.playerprox ~= nil then
+		inst:RemoveComponent("playerprox")
+	end
+end
+
 
 local HOOK_CANT_TAGS = { "INLIMBO" }
 local HOOK_ONEOF_TAGS = { "fishinghook" }
@@ -79,18 +138,67 @@ local function playlandfx(inst)
 	puddle.Transform:SetRotation(math.random() * 360)
 end
 
-local function renova(inst)
+local function RefreshTropicalSchool(inst)
 	local x, y, z = inst.Transform:GetWorldPosition()
 	local item = SpawnPrefab("fishinhole")
+	if item == nil then
+		inst.components.timer:StartTimer(SCHOOL_REFRESH_TIMER, 120)
+		return
+	end
 	item.Transform:SetPosition(x, y, z)
 	inst:Remove()
 end
 
-local function renova2(inst)
+local function RefreshPondSchool(inst)
 	local x, y, z = inst.Transform:GetWorldPosition()
 	local item = SpawnPrefab("fishinholeham")
+	if item == nil then
+		inst.components.timer:StartTimer(SCHOOL_REFRESH_TIMER, 120)
+		return
+	end
 	item.Transform:SetPosition(x, y, z)
 	inst:Remove()
+end
+
+SetDepleted = function(inst)
+	StopSchoolScattering(inst)
+	inst:AddTag("ignoretrawlnettarget")
+	StopUpdating(inst)
+	inst.Physics:SetCollisionMask(SWIMMING_COLLISION_MASK)
+	inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)
+	inst.AnimState:SetLayer(LAYER_WIP_BELOW_OCEAN)
+	inst.AnimState:SetBuild("fishschool")
+	inst.AnimState:SetBank("fishschool")
+	inst.AnimState:PlayAnimation("idle_loop_gone", true)
+	inst.Transform:SetScale(0.7, 0.7, 0.7)
+	inst.MiniMapEntity:SetEnabled(false)
+end
+
+local function StartTrawlCooldown(inst)
+	SetDepleted(inst)
+	inst.components.timer:StartTimer(SCHOOL_REFRESH_TIMER, 120)
+end
+
+local function OnTrawl(inst)
+	if inst.components.timer:TimerExists(SCHOOL_REFRESH_TIMER) then return nil end
+	local item = SpawnPrefab("oceanfish_small_61_inv")
+	if item ~= nil then
+		item.Transform:SetPosition(inst.Transform:GetWorldPosition())
+		item.Transform:SetRotation(inst.Transform:GetRotation())
+	end
+	StartTrawlCooldown(inst)
+	return item
+end
+
+local function OnTrawlHam(inst)
+	if inst.components.timer:TimerExists(SCHOOL_REFRESH_TIMER) then return nil end
+	local item = SpawnPrefab("oceanfish_small_10_inv")
+	if item ~= nil then
+		item.Transform:SetPosition(inst.Transform:GetWorldPosition())
+		item.Transform:SetRotation(inst.Transform:GetRotation())
+	end
+	StartTrawlCooldown(inst)
+	return item
 end
 
 local function OnLand(inst)
@@ -100,7 +208,6 @@ local function OnLand(inst)
 	if land_in_water then
 		StartUpdating(inst)
 
-		--	    inst:RemoveComponent("complexprojectile")
 		inst.Physics:SetCollisionMask(SWIMMING_COLLISION_MASK)
 		inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)
 		inst.AnimState:SetLayer(LAYER_WIP_BELOW_OCEAN)
@@ -109,7 +216,7 @@ local function OnLand(inst)
 		inst.AnimState:PlayAnimation("idle_loop_gone", true)
 		inst.Transform:SetScale(0.7, 0.7, 0.7)
 		SpawnPrefab("splash").Transform:SetPosition(x, y, z)
-		inst:DoTaskInTime(120, renova)
+		inst:DoTaskInTime(120, RefreshTropicalSchool)
 
 		local item = SpawnPrefab("oceanfish_small_61")
 		item.Transform:SetPosition(x, y, z)
@@ -120,7 +227,6 @@ local function OnLand(inst)
 		item.Transform:SetRotation(inst.Transform:GetRotation())
 		item:DoTaskInTime(2 * FRAMES, playlandfx)
 
-		--	    inst:RemoveComponent("complexprojectile")
 		inst.Physics:SetCollisionMask(SWIMMING_COLLISION_MASK)
 		inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)
 		inst.AnimState:SetLayer(LAYER_WIP_BELOW_OCEAN)
@@ -128,7 +234,7 @@ local function OnLand(inst)
 		inst.AnimState:SetBank("fishschool")
 		inst.AnimState:PlayAnimation("idle_loop_gone", true)
 		inst.Transform:SetScale(0.7, 0.7, 0.7)
-		inst:DoTaskInTime(120, renova)
+		inst:DoTaskInTime(120, RefreshTropicalSchool)
 	end
 end
 
@@ -139,7 +245,6 @@ local function OnLand2(inst)
 	if land_in_water then
 		StartUpdating(inst)
 
-		--	    inst:RemoveComponent("complexprojectile")
 		inst.Physics:SetCollisionMask(SWIMMING_COLLISION_MASK)
 		inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)
 		inst.AnimState:SetLayer(LAYER_WIP_BELOW_OCEAN)
@@ -148,7 +253,7 @@ local function OnLand2(inst)
 		inst.AnimState:PlayAnimation("idle_loop_gone", true)
 		inst.Transform:SetScale(0.7, 0.7, 0.7)
 		SpawnPrefab("splash").Transform:SetPosition(x, y, z)
-		inst:DoTaskInTime(120, renova2)
+		inst:DoTaskInTime(120, RefreshPondSchool)
 
 		local item = SpawnPrefab("oceanfish_small_10")
 		item.Transform:SetPosition(x, y, z)
@@ -159,7 +264,6 @@ local function OnLand2(inst)
 		item.Transform:SetRotation(inst.Transform:GetRotation())
 		item:DoTaskInTime(2 * FRAMES, playlandfx)
 
-		--	    inst:RemoveComponent("complexprojectile")
 		inst.Physics:SetCollisionMask(SWIMMING_COLLISION_MASK)
 		inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)
 		inst.AnimState:SetLayer(LAYER_WIP_BELOW_OCEAN)
@@ -167,11 +271,12 @@ local function OnLand2(inst)
 		inst.AnimState:SetBank("fishschool")
 		inst.AnimState:PlayAnimation("idle_loop_gone", true)
 		inst.Transform:SetScale(0.7, 0.7, 0.7)
-		inst:DoTaskInTime(120, renova2)
+		inst:DoTaskInTime(120, RefreshPondSchool)
 	end
 end
 
 local function OnMakeProjectile(inst)
+	StopSchoolScattering(inst)
 	StopUpdating(inst)
 
 	inst:AddComponent("complexprojectile")
@@ -192,6 +297,7 @@ local function OnMakeProjectile(inst)
 end
 
 local function OnMakeProjectile2(inst)
+	StopSchoolScattering(inst)
 	StopUpdating(inst)
 
 	inst:AddComponent("complexprojectile")
@@ -243,7 +349,9 @@ local function OnSetRod(inst, rod)
 end
 
 local function OnEntityWake(inst)
-	StartUpdating(inst)
+	if not inst.components.timer:TimerExists(SCHOOL_REFRESH_TIMER) then
+		StartUpdating(inst)
+	end
 end
 
 local function OnEntitySleep(inst)
@@ -299,6 +407,11 @@ local function waterfn(data)
 	inst.components.oceanfishable.onsetrodfn = OnSetRod
 	inst.components.oceanfishable.overrideunreelratefn = OverrideUnreelRateFn
 	inst.components.oceanfishable.catch_distance = TUNING.OCEAN_FISHING.MUDBALL_CATCH_DIST
+
+	inst:AddComponent("trawlable")
+	inst.components.trawlable:SetTrawlFn(OnTrawl)
+
+	SetupSchoolScattering(inst, RefreshTropicalSchool)
 
 	inst.OnEntityWake = OnEntityWake
 	inst.OnEntitySleep = OnEntitySleep
@@ -359,6 +472,11 @@ local function waterfn2(data)
 	inst.components.oceanfishable.onsetrodfn = OnSetRod
 	inst.components.oceanfishable.overrideunreelratefn = OverrideUnreelRateFn
 	inst.components.oceanfishable.catch_distance = TUNING.OCEAN_FISHING.MUDBALL_CATCH_DIST
+
+	inst:AddComponent("trawlable")
+	inst.components.trawlable:SetTrawlFn(OnTrawlHam)
+
+	SetupSchoolScattering(inst, RefreshPondSchool)
 
 	inst.OnEntityWake = OnEntityWake
 	inst.OnEntitySleep = OnEntitySleep

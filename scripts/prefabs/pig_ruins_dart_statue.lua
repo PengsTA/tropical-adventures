@@ -31,7 +31,7 @@ local function updateart(inst)
         inst.AnimState:SetBuild("pig_ruins_dart_statue")
     elseif inst.components.workable.workleft > 10 * (2 / 3) then
         inst.AnimState:SetBuild("pig_ruins_dart_statue_stage2")
-    elseif inst.components.workable.workleft > 10 * (1 / 3) then
+    else
         inst.AnimState:SetBuild("pig_ruins_dart_statue_stage3")
     end
 end
@@ -42,18 +42,23 @@ local function onsave(inst, data)
 end
 
 local function onload(inst, data)
-    if data.rotation then
-        inst.setrotation(inst, data.rotation)
+    if data then
+        if data.rotation then
+            inst.setrotation(inst, data.rotation)
+        end
+        inst.ccw = data.ccw
     end
-    inst.ccw = data.ccw
     updateart(inst)
 end
 
 local function launchdart(inst, angle)
     inst:DoTaskInTime(math.random() * 0.3, function()
+        if not inst:IsValid() then return end
         local proj = SpawnPrefab("pig_ruins_dart")
+        if not proj then return end
+        proj.shooter = inst
         local x, y, z = inst.Transform:GetWorldPosition()
-        local radius = 1
+        local radius = 0.6
         local theta = angle * DEGREES
         local pt = Vector3(radius * math.cos(theta), 0, -radius * math.sin(theta))
 
@@ -63,7 +68,9 @@ local function launchdart(inst, angle)
         proj.SoundEmitter:PlaySound("dontstarve_DLC003/common/traps/blowdart_fire")
 
         local fx = SpawnPrefab("circle_puff_fx")
-        fx.Transform:SetPosition(x + pt.x, y + 2, z + pt.z)
+        if fx then
+            fx.Transform:SetPosition(x + pt.x, y + 2, z + pt.z)
+        end
     end)
 end
 
@@ -78,7 +85,6 @@ local function disarm(inst, doer)
     local pt = Point(inst.Transform:GetWorldPosition())
     inst.components.lootdropper:SpawnLootPrefab("blowdart_pipe", pt)
     updateart(inst)
-    inst.components.autodartthrower:TurnOff()
     inst.SoundEmitter:PlaySound("dontstarve_DLC003/common/traps/disarm_wall")
 end
 
@@ -157,12 +163,16 @@ local function fn(Sim)
         function(inst, worker, workleft)
             local pt = Point(inst.Transform:GetWorldPosition())
             inst.components.autodartthrower:TurnOn()
-            inst:AddChild(SpawnPrefab("rock_hit_debris"))
+            local debris = SpawnPrefab("mining_fx")
+            if debris then
+                debris.Transform:SetPosition(pt.x, pt.y, pt.z)
+            end
             if workleft <= 0 then
                 inst.SoundEmitter:PlaySound("dontstarve/wilson/rock_break")
                 inst.components.lootdropper:DropLoot(pt)
                 SpawnPrefab("collapse_small").Transform:SetPosition(inst.Transform:GetWorldPosition())
                 inst:Remove()
+                return
             end
             updateart(inst)
         end)

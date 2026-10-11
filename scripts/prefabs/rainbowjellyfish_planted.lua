@@ -115,6 +115,11 @@ local function ShouldSleep(inst)
 	return false
 end
 
+local function OnTrawl(inst)
+	inst:Remove()
+	return { SpawnPrefab("rainbowjellyfish") }
+end
+
 local function OnTimerDone(inst, data)
 	if data.name == "vaiembora" then
 		local invader = GetClosestInstWithTag("player", inst, 25)
@@ -185,6 +190,9 @@ local function fn(Sim)
 	-- locomotor must be constructed before the stategraph
 	inst:AddComponent("locomotor")
 	inst.components.locomotor.walkspeed = RAINBOWJELLYFISH_WALKSPEED
+
+	inst:AddComponent("trawlable")
+	inst.components.trawlable:SetTrawlFn(OnTrawl)
 
 	--inst.AnimState:SetRayTestOnBB(true);
 	--inst.AnimState:SetSortOrder(ANIM_SORT_ORDER_BELOW_GROUND.UNDERWATER)

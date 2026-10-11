@@ -21,10 +21,10 @@ local function inflictdamage(inst)
     local pt = Point(inst.Transform:GetWorldPosition())
     local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, AREA, nil, { "spear_trap", "INTERIOR_LIMBO" })
     for i, ent in ipairs(ents) do
-        if ent.components.health then
+        if ent.components.health and not ent:HasTag("wall") then
             inst.components.combat:DoAttack(ent)
         end
-        if ent.components.workable and ent.components.workable.workleft > 0 then
+        if ent.components.workable and ent.components.workable.workleft > 0 and not ent:HasTag("wall") and not ent:HasTag("structure") then
             ent.components.workable:Destroy(inst)
         end
     end
@@ -292,10 +292,10 @@ local function fn(Sim)
         OnKilled(inst)
     end
     inst.canshear = function(inst)
-            return true
-        end,
+        return true
+    end
 
-        inst:SetStateGraph("SGspear_trap")
+    inst:SetStateGraph("SGspear_trap")
 
     MakeSmallBurnable(inst)
     inst.components.burnable.disabled = true

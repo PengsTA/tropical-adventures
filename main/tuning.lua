@@ -21,36 +21,38 @@ TUNING.FOG_MOISTURE_RATE = 1000
 TUNING.TROPICAL_ADVENTURE_ACTIVATED = true
 
 TUNING.HAMROOM = {
-    roomtype = {
-        playerhouse_city_floor = "large",
-        pig_palace_floor = "xlarge",
-        vampirebatcave_floor = "cave",
-        roc_cave_floor = "cave",
-        pig_shop_florist_floor = "small",
-        pig_palace_gallery_floor = "big", ----------这两个啥都不合适
-        pig_palace_shop_floor = "medium",
-    },
-
-
     roomcamera = {
-        small = { pitch = 36, distance = 20, pos = -1 },
-        medium = { pitch = 35, distance = 24, pos = -2 },
-        big = { pitch = 35, distance = 27, pos = -1 },
-        large = { pitch = 36, distance = 27, pos = -2.5 },
-        cave = { pitch = 36, distance = 31, pos = 0 },
-        xlarge = { pitch = 36, distance = 38, pos = -2 },
+        pitch = 35,
+        fov = 35,
+        minimum_distance = 20,
+        height_offset = -1,
+        focus_back_offset = 3,
+        profiles = {
+            default = {
+                distance = 21,
+                focus_back_offset = 2.5,
+            },
+            shop = {
+                distance = 23,
+            },
+            player_house = {
+                distance = 25,
+            },
+            palace = {
+                distance = 38,
+                focus_back_offset = 4,
+            },
+            cave = {
+                distance = 33,
+                focus_back_offset = 3,
+            },
+        },
     },
 
-    roomsize = {
-        small = { back = 3.5, front = 8, side = 7.5 },
-        medium = { back = 5, front = 8.5, side = 7.5 },
-        big = { back = 5, front = 9.5, side = 9 },
-        large = { back = 5, front = 8, side = 11.5 },
-        cave = { back = 5, front = 13, side = 13 },
-        xlarge = { back = 5.5, front = 13, side = 13 },
-    },
 }
 
+
+TUNING.HAMROOM.roomcamera.profiles = require("tools/room_camera_profiles").CreateProfiles(TUNING.HAMROOM.roomcamera.profiles)
 
 TUNING.tro_pairedkey = {
     qe = { 113, 101 },
@@ -129,12 +131,33 @@ TUNING.IRON_LORD_TIME = 180
 --constants-----------------------
 ----------------------------------
 ---
-GLOBAL.REGION_NAMES = { "volcano", "shipwrecked", "hamlet", "forest", }
-GLOBAL.REGIONS = table.invert(REGION_NAMES)
-
-
-
 GLOBAL.EQUIPSLOTS.BARCO = "barco"
+rawset(GLOBAL, "BOATEQUIPSLOTS", rawget(GLOBAL, "BOATEQUIPSLOTS") or {
+    BOAT_SAIL = "sail",
+    BOAT_LAMP = "lamp",
+})
+rawset(GLOBAL, "BOAT_ANIM_IDS", rawget(GLOBAL, "BOAT_ANIM_IDS") or {
+    row_pre = 1,
+    row_loop = 2,
+    row_pst = 3,
+    sail_pre = 4,
+    sail_loop = 5,
+    sail_pst = 6,
+    trawlover = 7,
+    idle_loop = 8,
+    hit = 9,
+    run_loop = 10,
+})
+rawset(GLOBAL, "BOAT_ID_TO_ANIM", rawget(GLOBAL, "BOAT_ID_TO_ANIM") or {})
+for animname, id in pairs(rawget(GLOBAL, "BOAT_ANIM_IDS")) do
+    rawget(GLOBAL, "BOAT_ID_TO_ANIM")[id] = animname
+end
+rawset(GLOBAL, "LOOP_BOAT_ANIMS", rawget(GLOBAL, "LOOP_BOAT_ANIMS") or {
+    row_loop = true,
+    sail_loop = true,
+    idle_loop = true,
+    run_loop = true,
+})
 GLOBAL.FUELTYPE.TAR = "TAR"
 GLOBAL.FUELTYPE.REPARODEBARCO = "REPARODEBARCO"
 GLOBAL.FUELTYPE.LIVINGARTIFACT = "LIVINGARTIFACT"

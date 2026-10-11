@@ -24,16 +24,20 @@ local assets = {
     Asset("ANIM", "anim/waxwell_shadowboat_build.zip"),
 }
 
-local function OnSave(inst, data)
-
-end
+local BASE_TAGS = {
+    "boatsw",
+    "aquatic",
+    "sailable",
+    "ignorewalkableplatforms",
+    "outofreach",
+}
 
 local function OnLoad(inst, data)
     inst:DoTaskInTime(0, function(inst)
         local owner = inst.components.inventoryitem.owner
-        if owner ~= nil then
+        if owner ~= nil and owner.components.inventory ~= nil and owner.components.sailor ~= nil then
             owner.components.inventory:DropItem(inst)
-            owner.components.driver:BoatJump(owner, inst)
+            owner.components.sailor:BoatJump(inst)
         end
     end)
 end
@@ -48,7 +52,22 @@ end
 local function SetPercentUsed(inst, data)
     if inst.percentused and data and data.percent then
         local percent = data.percent
-        inst.percentused:set((percent == nil and 255) or (percent <= 0 and 0) or math.clamp(math.floor(percent * 100 + .5), 1, 100))
+        inst.percentused:set((percent == nil and 255) or (percent <= 0 and 0) or
+            math.clamp(math.floor(percent * 100 + .5), 1, 100))
+    end
+end
+
+local function OnBoatHealthChanged(inst, data)
+    if data ~= nil then
+        SetPercentUsed(inst, data)
+    end
+end
+
+local function OnBoatImpact(inst)
+    local fx = SpawnPrefab("boat_hit_fx_quackeringram")
+    if fx ~= nil then
+        fx.Transform:SetPosition(inst.Transform:GetWorldPosition())
+        fx.Transform:SetRotation(inst.Transform:GetRotation())
     end
 end
 
@@ -65,82 +84,6 @@ local function OnHammered(inst)
     inst:Remove()
 end
 
-local function OnItemGet(inst, data)
-    local owner = inst.components.inventoryitem.owner
-    local sailslot = inst.components.container:GetItemInSlot(1)
-    local luzslot = inst.components.container:GetItemInSlot(2)
-
-    local model = inst
-    if owner and owner.boat_proxy then
-        model = owner.boat_proxy
-    end
-
-    model.AnimState:ClearOverrideSymbol("swap_sail")
-    model.AnimState:ClearOverrideSymbol("swap_propeller")
-    model.AnimState:ClearOverrideSymbol("swap_lantern")
-    model.AnimState:ClearOverrideSymbol("swap_trawlnet")
-
-    if sailslot then
-        model.AnimState:OverrideSymbol(sailslot.symboltooverride, sailslot.AnimState:GetBuild() or sailslot.build,
-            sailslot.symbol)
-    end
-
-    if sailslot and sailslot:HasTag("sail") then
-        inst:AddTag("sail")
-        if owner then
-            owner:AddTag("sail")
-        end
-    else
-        inst:RemoveTag("sail")
-        if owner then
-            owner:RemoveTag("sail")
-        end
-    end
-
-    if luzslot then
-        model.AnimState:OverrideSymbol(luzslot.symboltooverride, luzslot.AnimState:GetBuild() or luzslot.build,
-            luzslot.symbol)
-    end
-
-    if luzslot and luzslot:HasTag("boatlight") then luzslot:AddTag("nonavio") end
-    if luzslot then luzslot.navio = inst end
-    if sailslot then sailslot.navio = inst end
-end
-
-local function onequip(inst, owner)
-    -- inst:AddTag("boat_occupied")
-    if not TheWorld.ismastersim then return end
-    inst.components.container:Close(owner)
-    local proxy = SpawnAt(inst.prefab .. "_proxy" or "rowboat_proxy", owner)
-    if proxy then
-        owner:AddChild(proxy)
-        owner.boat_proxy = proxy
-        proxy.Transform:SetPosition(0, -0.1, 0)
-        proxy.components.container_proxy:SetMaster(inst)
-        proxy.components.container_proxy:Open(owner)
-        proxy.Transform:SetRotation(inst.Transform:GetRotation())
-        OnItemGet(inst)
-
-        if inst:HasTag("surfboard") then
-            owner:AddTag("surf")
-        end
-    end
-end
-
-local function onunequip(inst, owner)
-    local proxy = owner.boat_proxy
-    if proxy then
-        inst.Transform:SetRotation(proxy.Transform:GetRotation())
-        owner:RemoveChild(proxy)
-        owner.boat_proxy = nil
-        if proxy:IsValid() then
-            proxy:Remove() ------这儿似乎有问题
-        end
-    end
-    owner:RemoveTag("surf")
-    OnItemGet(inst)
-end
-
 local function OnCollapsed(inst)
     local collapse = SpawnAt(inst.collapse, inst)
     SpawnAt("collapse_small", inst)
@@ -152,6 +95,65 @@ local function OnCollapsed(inst)
         return
     end
     collapse:SetChest(inst)
+end
+
+local function AddTags(inst, tags)
+    for _, tag in ipairs(tags or {}) do
+        inst:AddTag(tag)
+    end
+end
+
+local function ConfigureBoatHealth(inst, config)
+    inst:AddComponent("boathealth")
+    inst.components.boathealth:SetMaxHealth(config.maxuses)
+    inst.components.boathealth:SetHealth(config.maxuses)
+    inst.components.boathealth.rate = (config.useamount or 0) * 30
+    inst.components.boathealth:SetDepletedFn(function()
+        if inst:IsValid() and inst.OnCollapse ~= nil then
+            local sailor = inst.components.sailable ~= nil and inst.components.sailable:GetSailor() or nil
+            if sailor ~= nil and sailor.components.sailor ~= nil then
+                sailor.components.sailor:Disembark(nil, true)
+            end
+            inst:OnCollapse()
+        end
+    end)
+end
+
+local function ConfigureServerBoat(inst, config)
+    inst:AddComponent("interactions")
+
+    inst:AddComponent("workable")
+    inst.components.workable:SetWorkAction(ACTIONS.HAMMER)
+    inst.components.workable:SetWorkLeft(3)
+    inst.components.workable:SetOnFinishCallback(OnHammered)
+
+    inst:AddComponent("inventoryitem")
+    inst.components.inventoryitem.cangoincontainer = false
+    inst.components.inventoryitem.canbepickedup = false
+
+    inst:AddComponent("container")
+    inst.components.container:WidgetSetup(config.name or "rowboat")
+
+    inst:AddComponent("boatequipment")
+    inst:AddComponent("sailable")
+    ConfigureBoatHealth(inst, config)
+
+    inst:ListenForEvent("boathealthchange", OnBoatHealthChanged)
+    inst:ListenForEvent("boatimpact", OnBoatImpact)
+
+    inst.OnCollapse = OnCollapsed
+    inst.OnHammer = OnHammered
+    inst.OnLoad = OnLoad
+
+    inst.collapse = config.collapse
+    inst.loottable = config.loottable
+    inst.SetPercentUsed = SetPercentUsed
+
+    AddTags(inst, config.tags)
+
+    if config.postfn then
+        config.postfn(inst)
+    end
 end
 
 local function makeBoatFn(config)
@@ -173,12 +175,8 @@ local function makeBoatFn(config)
         inst.MiniMapEntity:SetIcon(config.icon)
 
         MakeWaterObstaclePhysics(inst, 0.5, 2, 1.25)
-
-        inst:AddTag("boatsw")
-        inst:AddTag("barcoapto")
-        inst:AddTag("aquatic")
-        inst:AddTag("ignorewalkableplatforms")
-        inst:AddTag("outofreach")
+        inst:SetPhysicsRadiusOverride(0.5)
+        AddTags(inst, BASE_TAGS)
 
         inst.percentused = net_byte(inst.GUID, "boatrow._percentused", "boatrow._percentuseddirty")
         inst.percentused:set_local(100)
@@ -186,110 +184,11 @@ local function makeBoatFn(config)
 
         inst.entity:SetPristine()
 
-        if not TheWorld.ismastersim then return inst end
-
-        inst:AddComponent("interactions")
-
-        -- Set uses and armor
-        inst:AddComponent("finiteuses")
-        inst.components.finiteuses:SetOnFinished(function() end)
-        inst.components.finiteuses:SetMaxUses(config.maxuses)
-        inst.components.finiteuses:SetUses(config.maxuses)
-
-        inst:AddComponent("armor")
-        inst.components.armor:SetKeepOnFinished(true)
-        inst.components.armor:InitCondition(config.maxuses, config.armor or 0.99)
-
-        inst:AddComponent("workable")
-        inst.components.workable:SetWorkAction(ACTIONS.HAMMER)
-        inst.components.workable:SetWorkLeft(3)
-        inst.components.workable:SetOnFinishCallback(OnHammered)
-
-        inst:AddComponent("inventoryitem")
-        inst.components.inventoryitem.cangoincontainer = false
-        inst.components.inventoryitem.canbepickedup = false
-
-        inst:AddComponent("equippable")
-        inst.components.equippable.equipslot = EQUIPSLOTS.BARCO
-        inst.components.equippable:SetOnEquip(onequip)
-        inst.components.equippable:SetOnUnequip(onunequip)
-
-        -- Set container widget
-        inst:AddComponent("container")
-        inst.components.container:WidgetSetup(config.name or "rowboat")
-
-        inst:ListenForEvent("itemget", OnItemGet)
-        inst:ListenForEvent("itemlose", OnItemGet)
-        inst:ListenForEvent("percentusedchange", SetPercentUsed)
-
-
-        inst.OnCollapse = OnCollapsed
-        inst.OnHammer = OnHammered
-        inst.OnLoad = OnLoad
-        inst.OnSave = OnSave
-
-        -- Optional: remove on finished
-        if config.onfinished then
-            inst.components.finiteuses:SetOnFinished(inst.Remove)
+        if not TheWorld.ismastersim then
+            return inst
         end
 
-        -- Collapse settings
-        inst.collapse = config.collapse
-        inst.loottable = config.loottable
-        inst.useamount = config.useamount
-        inst.SetPercentUsed = SetPercentUsed
-
-        -- Add custom tags
-        if config.tags then
-            for _, tag in ipairs(config.tags) do
-                inst:AddTag(tag)
-            end
-        end
-
-        if config.postfn then
-            config.postfn(inst)
-        end
-
-        return inst
-    end
-end
-
-local function makeFakeBoatFn(config)
-    return function()
-        local inst = CreateEntity()
-        inst.entity:AddTransform()
-        inst.Transform:SetFourFaced()
-        inst.entity:AddAnimState()
-        inst.entity:AddSoundEmitter()
-        inst.entity:AddNetwork()
-
-        inst.AnimState:SetBank(config.bank or "rowboat")
-        inst.banc = config.bank or "rowboat"
-        inst.AnimState:SetBuild(config.build)
-        inst.AnimState:PlayAnimation("run_loop", true)
-        inst.overridebuild = config.build
-        -- inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-        inst.AnimState:SetSortOrder(0)
-
-        inst:SetPrefabNameOverride(config.name)
-
-        -- inst:AddTag("NOCLICK")
-        -- inst:AddTag("FX")
-        inst:AddTag("boat_proxy")
-        inst:AddComponent("container_proxy")
-        inst.components.container_proxy:SetCanBeOpened(false)
-
-        inst.entity:SetPristine()
-
-        if not TheWorld.ismastersim then return inst end
-
-        -- Set container widget
-        inst:AddComponent("interactions")
-        inst:AddComponent("inspectable")
-
-        if config.postfn_proxy then
-            config.postfn_proxy(inst)
-        end
+        ConfigureServerBoat(inst, config)
 
         return inst
     end
@@ -299,7 +198,6 @@ local prefabs = {}
 
 for _, boat in pairs(require("datadefs/boat_defs")) do
     table.insert(prefabs, Prefab(boat.name, makeBoatFn(boat), assets))
-    table.insert(prefabs, Prefab(boat.name .. "_proxy", makeFakeBoatFn(boat), assets))
 end
 
 return unpack(prefabs)

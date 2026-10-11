@@ -9,11 +9,14 @@ local assets =
     Asset("ANIM", "anim/swap_sail_pirate.zip"),
 }
 
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local total_day_time = 480
+
 local SAIL_SPEED_MULT = 0.2
 local SAIL_ACCEL_MULT = 0
-
 local SAIL_PERISH_TIME = total_day_time * 2
+
 local CLOTH_SAIL_SPEED_MULT = 0.3
 local CLOTH_SAIL_ACCEL_MULT = 0.5
 local CLOTH_SAIL_PERISH_TIME = total_day_time * 3
@@ -32,460 +35,178 @@ local IRON_WIND_PERISH_TIME = total_day_time * 4
 
 local WOODLEGS_SAIL_ACCEL_MULT = -0.5
 
-local function startconsuming(inst)
-    if inst.components.fueled and not inst.components.fueled.consuming then
-        inst.components.fueled:StartConsuming()
+local function DetachFromBoat(inst)
+    local boat = BoatEquip.GetItemBoat(inst)
+    if boat ~= nil then
+        boat.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol)
     end
-end
-
-local function stopconsuming(inst)
-    if inst.components.fueled and inst.components.fueled.consuming then
+    BoatEquip.ClearItemBoatState(inst)
+    if inst.components.fueled then
         inst.components.fueled:StopConsuming()
     end
 end
 
-local function onmounted(boat, data)
-    --    local item = boat.components.container:GetItemInBoatSlot(BOATEQUIPSLOTS.BOAT_SAIL)
-    --    data.driver.AnimState:OverrideSymbol(item.symboltooverride, item.build, item.symbol)
-
-    --    if data.driver.components.locomotor then
-    --        data.driver.components.locomotor:AddSpeedModifier_Mult("SAIL", item.sail_speed_mult)
-    --        data.driver.components.locomotor:AddAccelerationModifier("SAIL", item.sail_accel_mult)
-    --        data.driver.components.locomotor:AddDecelerationModifier("SAIL", item.sail_accel_mult)
-    --    end
-end
-
-local function ondismounted(boat, data)
-    --    local item = boat.components.container:GetItemInBoatSlot(BOATEQUIPSLOTS.BOAT_SAIL)
-    --    data.driver.AnimState:ClearOverrideSymbol(item.symboltooverride)
-    --    stopconsuming(item)
-
-    --    if data.driver.components.locomotor then
-    --        data.driver.components.locomotor:RemoveSpeedModifier_Mult("SAIL")
-    --        data.driver.components.locomotor:RemoveAccelerationModifier("SAIL")
-    --        data.driver.components.locomotor:RemoveDecelerationModifier("SAIL")
-    --    end
-end
-
-local function onstartmoving(boat, data)
-    --    local item = boat.components.container:GetItemInBoatSlot(BOATEQUIPSLOTS.BOAT_SAIL)
-    --    startconsuming(item)
-end
-
-local function onstopmoving(boat, data)
-    --    local item = boat.components.container:GetItemInBoatSlot(BOATEQUIPSLOTS.BOAT_SAIL)
-    --    stopconsuming(item)
-end
-
-local function onequip(inst, owner)
-    owner.AnimState:OverrideSymbol(inst.symboltooverride, inst.AnimState:GetBuild() or inst.build, inst.symbol)
-
-    --    if inst.showPropFX then
-    --        local driver = owner.components.drivable.driver
-    --        if driver then
-    --            driver.AnimState:Show("PROPDROP")
-    --        end
-    --    end
-
-    --    if owner.components.drivable.driver then
-    --        local driver = owner.components.drivable.driver
-    --        driver.AnimState:OverrideSymbol(inst.symboltooverride, inst.build, inst.symbol)
-    --        driver:PushEvent("sailequipped")
-    --        if inst.flapsound then
-    --            driver.SoundEmitter:PlaySound( "dontstarve_DLC002/" .. inst.flapsound)
-    --        end
-    --        if driver.components.locomotor then
-    --            driver.components.locomotor:AddSpeedModifier_Mult("SAIL", inst.sail_speed_mult)
-    --            driver.components.locomotor:AddAccelerationModifier("SAIL", inst.sail_accel_mult)
-    --            driver.components.locomotor:AddDecelerationModifier("SAIL", inst.sail_accel_mult)
-    --        end
-    --    end
-
-    --    inst:ListenForEvent("mounted", onmounted, owner)
-    --    inst:ListenForEvent("dismounted", ondismounted, owner)
-    --    inst:ListenForEvent("boatstartmoving", onstartmoving, owner)
-    --    inst:ListenForEvent("boatstopmoving", onstopmoving, owner)
-end
-
-local function onunequip(inst, owner)
-    owner.AnimState:ClearOverrideSymbol(inst.symboltooverride)
-    --    local driver = owner.components.drivable.driver
-    --    if driver then
-    --        driver.AnimState:Hide("PROPDROP")
-    --    end
-
-    --    if owner.components.drivable.driver then
-    --        local driver = owner.components.drivable.driver
-    --        driver.AnimState:ClearOverrideSymbol(inst.symboltooverride)
-    --        driver:PushEvent("sailunequipped")
-    --        if inst.flapsound then
-    --            driver.SoundEmitter:PlaySound( "dontstarve_DLC002/" .. inst.flapsound)
-    --        end
-
-    --        if driver.components.locomotor then
-    --            driver.components.locomotor:RemoveSpeedModifier_Mult("SAIL")
-    --            driver.components.locomotor:RemoveAccelerationModifier("SAIL")
-    --            driver.components.locomotor:RemoveDecelerationModifier("SAIL")
-    --        end
-    --    end
-
-    --    inst:RemoveEventCallback("mounted", onmounted, owner)
-    --    inst:RemoveEventCallback("dismounted", ondismounted, owner)
-    --    inst:RemoveEventCallback("boatstartmoving", onstartmoving, owner)
-    --    inst:RemoveEventCallback("boatstopmoving", onstopmoving, owner)
-    --    stopconsuming(inst)
-
-    --    if inst.RemoveOnUnequip then
-    --        inst:Remove()
-    --    end
-end
-
-local function ontakefuelfn(inst)
-    if inst.components.finiteuses.current + 100 >= inst.components.finiteuses.total then
-        inst.components.finiteuses.current = inst.components.finiteuses.total
-    else
-        inst.components.finiteuses.current = inst.components.finiteuses.current + 100
+local function OnSailDepleted(inst)
+    if inst.components.inventoryitem and inst.components.inventoryitem.owner then
+        inst.components.inventoryitem.owner.AnimState:ClearOverrideSymbol(inst.symboltooverride)
     end
-end
-
-local function turnon(inst)
-    if not inst.components.fueled:IsEmpty() then
-        inst.components.fueled:StartConsuming()
-    end
-end
-
-
-local function turnoff(inst)
-    inst.components.fueled:StopConsuming()
-end
-
-local function retirado(inst)
-    if inst.navio then inst.navio.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
-    inst.navio = nil
-    if not inst.navio and inst.components.fueled then inst.components.fueled:StopConsuming() end
-end
-
-local function sail_perish(inst)
-    onunequip(inst, inst.components.inventoryitem.owner)
     inst:Remove()
 end
 
-local function sail_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
+local SAIL_DEFS = {
+    sail = {
+        build = "swap_sail",
+        speed_mult = SAIL_SPEED_MULT,
+        accel_mult = SAIL_ACCEL_MULT,
+        perish_time = SAIL_PERISH_TIME,
+        loopsound = "common/sail_LP_leaf",
+        flapsound = "common/sail_flap_leaf",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_leaf",
+    },
+    clothsail = {
+        build = "swap_sail_cloth",
+        speed_mult = CLOTH_SAIL_SPEED_MULT,
+        accel_mult = CLOTH_SAIL_ACCEL_MULT,
+        perish_time = CLOTH_SAIL_PERISH_TIME,
+        loopsound = "common/sail_LP_cloth",
+        flapsound = "common/sail_flap_cloth",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_cloth",
+    },
+    snakeskinsail = {
+        build = "swap_sail_snakeskin",
+        speed_mult = SNAKESKIN_SAIL_SPEED_MULT,
+        accel_mult = SNAKESKIN_SAIL_ACCEL_MULT,
+        perish_time = SNAKESKIN_SAIL_PERISH_TIME,
+        loopsound = "common/sail_LP_snakeskin",
+        flapsound = "common/sail_flap_snakeskin",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_snakeskin",
+    },
+    feathersail = {
+        build = "swap_sail_feathers",
+        speed_mult = FEATHER_SAIL_SPEED_MULT,
+        accel_mult = FEATHER_SAIL_ACCEL_MULT,
+        perish_time = FEATHER_SAIL_PERISH_TIME,
+        loopsound = "common/sail_LP_feather",
+        flapsound = "common/sail_flap_feather",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_feather",
+    },
+    ironwind = {
+        bank = "propeller",
+        build = "swap_propeller",
+        symbol = "swap_propeller",
+        speed_mult = IRON_WIND_SPEED_MULT,
+        accel_mult = IRON_WIND_ACCEL_MULT,
+        perish_time = IRON_WIND_PERISH_TIME,
+        loopsound = "common/boatpropellor_lp",
+        sail_sound = "dontstarve_DLC002/common/boatpropellor_lp",
+        fueltype = "REPARODEBARCO",
+        accepting_fuel = true,
+        showPropFX = true,
+        has_interactions = true,
+    },
+    woodlegssail = {
+        build = "swap_sail_pirate",
+        anim = "anim",
+        speed_mult = 0,
+        accel_mult = WOODLEGS_SAIL_ACCEL_MULT,
+        loopsound = "common/sail_LP_sealegs",
+        flapsound = "common/sail_flap_sealegs",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_sealegs",
+        remove_on_unequip = true,
+        no_fuel = true,
+    },
+    malbatrossail = {
+        build = "swap_sail_malbatro",
+        speed_mult = CLOTH_SAIL_SPEED_MULT,
+        accel_mult = CLOTH_SAIL_ACCEL_MULT,
+        perish_time = CLOTH_SAIL_PERISH_TIME,
+        loopsound = "common/sail_LP_cloth",
+        flapsound = "common/sail_flap_cloth",
+        sail_sound = "dontstarve_DLC002/common/sail_LP_cloth",
+    },
+}
 
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = SAIL_SPEED_MULT
-    inst.sail_accel_mult = SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_leaf"
-    inst.flapsound = "common/sail_flap_leaf"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
+local function ConfigureFuel(inst, def)
+    if def.no_fuel then
+        return
     end
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
 
     inst:AddComponent("fueled")
-    inst.components.fueled.fueltype = "USAGE"
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled:InitializeFuelLevel(SAIL_PERISH_TIME)
+    inst.components.fueled.fueltype = def.fueltype or "USAGE"
+    inst.components.fueled:SetDepletedFn(OnSailDepleted)
 
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
-end
-
-local function clothsail_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail_cloth"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
-
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = CLOTH_SAIL_SPEED_MULT
-    inst.sail_accel_mult = CLOTH_SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_cloth"
-    inst.flapsound = "common/sail_flap_cloth"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
+    if def.perish_time then
+        inst.components.fueled:InitializeFuelLevel(def.perish_time)
     end
 
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    inst:AddComponent("fueled")
-    inst.components.fueled.fueltype = "USAGE"
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled:InitializeFuelLevel(CLOTH_SAIL_PERISH_TIME)
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
+    if def.accepting_fuel then
+        inst.components.fueled.accepting = true
+    end
 end
 
-local function snakeskinsail_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail_snakeskin"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
+local function MakeSailFn(name, def)
+    return function()
+        local inst = CreateEntity()
+        inst.entity:AddTransform()
+        inst.entity:AddAnimState()
+        inst.entity:AddNetwork()
 
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = SNAKESKIN_SAIL_SPEED_MULT
-    inst.sail_accel_mult = SNAKESKIN_SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_snakeskin"
-    inst.flapsound = "common/sail_flap_snakeskin"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
+        inst.boat_consumes_while_sailing = not def.no_fuel
 
-    inst.entity:SetPristine()
+        MakeInventoryPhysics(inst)
 
-    if not TheWorld.ismastersim then
+        inst.build = def.build
+        inst.symbol = def.symbol or "swap_sail"
+        inst.symboltooverride = def.symbol or "swap_sail"
+        inst.showPropFX = def.showPropFX
+
+        inst.AnimState:SetBank(def.bank or "sail")
+        inst.AnimState:SetBuild(inst.build)
+        inst.AnimState:PlayAnimation(def.anim or "idle")
+
+        inst.sail_speed_mult = def.speed_mult
+        inst.sail_accel_mult = def.accel_mult
+        inst.loopsound = def.loopsound
+        inst.flapsound = def.flapsound
+        inst.sail_sound = def.sail_sound
+
+        if def.remove_on_unequip then
+            inst.RemoveOnUnequip = true
+        end
+
+        inst:AddTag("sail")
+        MakeInventoryFloatable(inst)
+
+        inst.entity:SetPristine()
+
+        if not TheWorld.ismastersim then
+            return inst
+        end
+
+        inst:AddComponent("inspectable")
+        inst:AddComponent("inventoryitem")
+        inst:AddComponent("equippable")
+        inst.components.equippable.boatequipslot = BOATEQUIPSLOTS.BOAT_SAIL
+        inst.components.equippable.restrictedtag = "ta_boat_equipment"
+
+        if def.has_interactions then
+            inst:AddComponent("interactions")
+        end
+
+        ConfigureFuel(inst, def)
+
+        MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
+        MakeSmallPropagator(inst)
+        inst:ListenForEvent("onpickup", DetachFromBoat)
+
         return inst
     end
-
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    inst:AddComponent("fueled")
-    inst.components.fueled.fueltype = "USAGE"
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled:InitializeFuelLevel(SNAKESKIN_SAIL_PERISH_TIME)
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
 end
 
-local function feathersail_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail_feathers"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
+local prefabs = {}
 
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = FEATHER_SAIL_SPEED_MULT
-    inst.sail_accel_mult = FEATHER_SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_feather"
-    inst.flapsound = "common/sail_flap_feather"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
-    end
-
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    inst:AddComponent("fueled")
-    inst.components.fueled.fueltype = "USAGE"
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled:InitializeFuelLevel(FEATHER_SAIL_PERISH_TIME)
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
+for name, def in pairs(SAIL_DEFS) do
+    table.insert(prefabs, Prefab("common/inventory/" .. name, MakeSailFn(name, def), assets))
 end
 
-local function ironwind_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_propeller"
-    inst.symbol = "swap_propeller"
-    inst.symboltooverride = "swap_propeller"
-    inst.navio = nil
-
-    inst.showPropFX = true
-    inst.AnimState:SetBank("propeller")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = IRON_WIND_SPEED_MULT
-    inst.sail_accel_mult = IRON_WIND_ACCEL_MULT
-    inst.loopsound = "common/boatpropellor_lp"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
-    end
-
-    inst:AddComponent("interactions")
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    inst:AddComponent("fueled")
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled.accepting = true
-    inst.components.fueled:InitializeFuelLevel(IRON_WIND_PERISH_TIME)
-    inst.components.fueled.fueltype = "REPARODEBARCO"
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
-end
-
-local function woodlegssail_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail_pirate"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
-
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("anim")
-    inst.sail_speed_mult = 0
-    inst.sail_accel_mult = WOODLEGS_SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_sealegs"
-    inst.flapsound = "common/sail_flap_sealegs"
-    inst.RemoveOnUnequip = true
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
-    end
-
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
-end
-
-local function albatros_fn(Sim)
-    local inst = CreateEntity()
-    inst.entity:AddTransform()
-    inst.entity:AddAnimState()
-    MakeInventoryPhysics(inst)
-    inst.entity:AddNetwork()
-    --    MakeInventoryFloatable(inst, "idle_water", "idle")
-    inst.build = "swap_sail_malbatro"
-    inst.symbol = "swap_sail"
-    inst.symboltooverride = "swap_sail"
-    inst.navio = nil
-
-    inst.AnimState:SetBank("sail")
-    inst.AnimState:SetBuild(inst.build)
-    inst.AnimState:PlayAnimation("idle")
-    inst.sail_speed_mult = CLOTH_SAIL_SPEED_MULT
-    inst.sail_accel_mult = CLOTH_SAIL_ACCEL_MULT
-    inst.loopsound = "common/sail_LP_cloth"
-    inst.flapsound = "common/sail_flap_cloth"
-    inst:AddTag("sail")
-    MakeInventoryFloatable(inst)
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
-    end
-
-    inst:AddComponent("inspectable")
-
-    inst:AddComponent("inventoryitem")
-
-
-
-    inst:AddComponent("fueled")
-    inst.components.fueled.fueltype = "USAGE"
-    inst.components.fueled:SetDepletedFn(sail_perish)
-    inst.components.fueled:InitializeFuelLevel(CLOTH_SAIL_PERISH_TIME)
-
-    MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
-    MakeSmallPropagator(inst)
-    inst:ListenForEvent("onpickup", retirado)
-    return inst
-end
-
-return Prefab("common/inventory/sail", sail_fn, assets),
-    Prefab("common/inventory/clothsail", clothsail_fn, assets),
-    Prefab("common/inventory/snakeskinsail", snakeskinsail_fn, assets),
-    Prefab("common/inventory/feathersail", feathersail_fn, assets),
-    Prefab("common/inventory/ironwind", ironwind_fn, assets),
-    Prefab("common/inventory/woodlegssail", woodlegssail_fn, assets),
-    Prefab("common/inventory/malbatrossail", albatros_fn, assets)
+return unpack(prefabs)

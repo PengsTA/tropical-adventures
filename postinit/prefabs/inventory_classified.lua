@@ -7,7 +7,8 @@ AddPrefabPostInit("inventory_classified", function(inst)
         if rets[1] ~= nil and rets[1]:IsFull() ~= true then
             return rets
         end
-        local barco = inst:GetEquippedItem(EQUIPSLOTS.BARCO)
-        return barco ~= nil and { barco.replica.container } or rets
+        local sailor = ThePlayer ~= nil and ThePlayer.replica ~= nil and ThePlayer.replica.sailor or nil
+        local boat = sailor ~= nil and sailor:GetBoat() or nil
+        return boat ~= nil and { boat.replica.container } or rets
     end)
 end)

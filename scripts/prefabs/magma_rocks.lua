@@ -64,6 +64,40 @@ local function SetStage(inst, stage)
 	end
 end
 
+local function RestoreRock(inst)
+    inst.regen_task = nil
+    inst.regen_time = nil
+    inst:Show()
+    inst:RemoveTag("NOCLICK")
+    inst.Physics:SetCollides(true)
+    inst.MiniMapEntity:SetEnabled(true)
+    SetStage(inst, 3)
+    inst.components.workable:SetWorkLeft(6)
+end
+
+local function WaitForRegrowth(inst, delay)
+    if inst.regen_task ~= nil then inst.regen_task:Cancel() end
+    inst.stage = 0
+    inst:Hide()
+    inst:AddTag("NOCLICK")
+    inst.Physics:SetCollides(false)
+    inst.MiniMapEntity:SetEnabled(false)
+    local state = TheWorld.state
+    local year = (state.autumnlength or 20) + (state.winterlength or 15)
+        + (state.springlength or 20) + (state.summerlength or 15)
+    delay = delay or year * (TUNING.TOTAL_DAY_TIME or 480)
+    inst.regen_time = GetTime() + delay
+    inst.regen_task = inst:DoTaskInTime(delay, RestoreRock)
+end
+
+local function SetRegen(inst, enabled)
+    inst.regen = enabled ~= false
+    if not inst.regen and inst.regen_task ~= nil then
+        inst.regen_task:Cancel()
+        RestoreRock(inst)
+    end
+end
+
 local function onworked(inst, worker, workleft)
 	inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/dig_rockpile")
 
@@ -102,8 +136,12 @@ local function onworked(inst, worker, workleft)
 	end
 
 	if nextStage ~= inst.stage then
-		if nextStage == 0 then
-			inst:Remove()
+        if nextStage == 0 then
+            if inst.regen then
+                WaitForRegrowth(inst)
+            else
+                inst:Remove()
+            end
 		else
 			SetStage(inst, nextStage)
 		end
@@ -112,10 +150,17 @@ end
 
 local function OnSave(inst, data)
 	data.stage = inst.stage
+	data.regen = inst.regen
+	data.regen_remaining = inst.regen_time ~= nil and math.max(0, inst.regen_time - GetTime()) or nil
 end
 
 local function OnLoad(inst, data)
-	if data and data.stage then
+	if data and data.regen then
+		SetRegen(inst)
+	end
+	if data and data.stage == 0 and inst.regen then
+		WaitForRegrowth(inst, data.regen_remaining)
+	elseif data and STAGES[data.stage] ~= nil then
 		SetStage(inst, data.stage)
 		inst.components.workable:SetWorkLeft(STAGES[inst.stage].work)
 	end
@@ -159,6 +204,7 @@ local function commonfn()
 
 	inst.OnLoad = OnLoad
 	inst.OnSave = OnSave
+	inst.SetRegen = SetRegen
 
 	MakeHauntableWork(inst)
 
@@ -213,6 +259,7 @@ local function gold_commonfn()
 
 	inst.OnLoad = OnLoad
 	inst.OnSave = OnSave
+	inst.SetRegen = SetRegen
 
 	MakeHauntableWork(inst)
 

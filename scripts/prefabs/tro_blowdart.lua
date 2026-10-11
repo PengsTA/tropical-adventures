@@ -315,8 +315,6 @@ local function poisonattack(inst, attacker, target, projectile)
     if TroApplyPoison(target, -4, 5, 120) and target.components.combat then
         target.components.combat:SuggestTarget(attacker)
     end
-    -- this was commented out as the attack with the spear will do an attacked event. The poison itself doesn't need a second one pushed
-    --target:PushEvent("attacked", {attacker = attacker, damage = 0, projectile = projectile})
 end
 
 local function poison()

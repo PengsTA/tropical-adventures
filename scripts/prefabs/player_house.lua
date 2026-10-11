@@ -1,6 +1,12 @@
 require "prefabutil"
 require "recipes"
 
+local RoomLayouts = require "datadefs/interior"
+local PlayerHouseLayout = RoomLayouts.player_house
+local InteriorLayoutBuilder = require "tools/interior_layout_builder"
+local InteriorRoomBuilder = require "tools/interior_room_builder"
+local RoomExtensions = require "tools/interior_room_extensions"
+
 local assets =
 {
     -------house
@@ -19,10 +25,7 @@ local assets =
 
 
     ---------doors?-----------
-    -- Asset("ANIM", "anim/pisohamlet.zip"),
     -- Asset("ANIM", "anim/pig_shop_doormats.zip"),
-    -- Asset("ANIM", "anim/wallhamletcity1.zip"),
-    -- Asset("ANIM", "anim/wallhamletcity2.zip"),
     Asset("ANIM", "anim/portas.zip"),
 }
 
@@ -32,7 +35,6 @@ local assets =
 
 local prefabs =
 {
-
 }
 
 local function onhit(inst, worker)
@@ -56,8 +58,8 @@ local function onsave(inst, data)
     data.bank = inst.bank
     data.icon = inst.icon
 
-
     data.room = inst.room or nil
+    data.interiorID = inst.interiorID
 end
 
 local function onload(inst, data)
@@ -87,140 +89,73 @@ local function onload(inst, data)
     if data and data.room then
         inst.room = data.room or false
     end
+
+    if data and data.interiorID then
+        inst.interiorID = data.interiorID
+    end
 end
 
-local function onbuild_interior(inst)
-    local size = 1
-    local length = 7 * size --5.5
-    local width = 12 * size --8.5
+local function BuildRoom(manager, room, definition)
+    local size = PlayerHouseLayout.sizes[definition.kind] or definition
+    room.room_template = definition.kind or room.room_template
+    InteriorRoomBuilder.BuildShell(room, {
+        width = definition.width or size.width,
+        depth = definition.depth or size.depth,
+        reference_width = definition.reference_width or size.reference_width,
+        reference_depth = definition.reference_depth or size.reference_depth,
+        surface_style = definition.surface_style or size.surface_style,
+        center_prefab = definition.center_prefab or size.center_prefab or "playerhouse_room_center",
+        perimeter_prefab = definition.perimeter_prefab or size.perimeter_prefab or "house_wall2",
+    })
+    InteriorLayoutBuilder.SpawnFixtures(room, definition, { playercrafted = true })
+end
 
-    if not TheWorld.components.getposition_hamroom or TheWorld.components.getposition_hamroom:IsMax() then
+local function BuildPlayerHouseInterior(inst)
+    local manager = TheWorld.components.interior_manager
+    if manager == nil then
         return
     end
 
-    local x, z = TheWorld.components.getposition_hamroom:GetPosition()
-
-    local exit = SpawnPrefab("playerhouse_city_door_saida")
-    exit.Transform:SetPosition(x + 6 * size, 0, z)
-
-    inst.components.teleporter.targetTeleporter = exit
-    exit.components.teleporter.targetTeleporter = inst
-
-    -- exit.components.myth_teleporter:Target(inst)
-    -- inst.components.myth_teleporter:Target(exit) --使得出口和入口互相锁定为传送目标
-
-    -- local part = SpawnPrefab("playerhouse_center")
-    -- if part ~= nil then
-    --     part.Transform:SetPosition(x - 1.5 * size, 0, z) -----------------怪不得，这是视角的中心
-    -- end
-
-    local part = SpawnPrefab("playerhouse_city_floor")
-    if part ~= nil then
-        part.Transform:SetPosition(x - 1.5 * size, 0, z) -----------------怪不得，这是视角的中心
+    local rooms = manager:BuildPlayerHouse(inst, PlayerHouseLayout)
+    for _, definition in ipairs(PlayerHouseLayout.rooms) do
+        BuildRoom(manager, rooms[definition.key], definition)
     end
 
-    inst.room = true
-    TheWorld.components.getposition_hamroom:BuildHouse()
+    local hall_definition = PlayerHouseLayout.rooms[1]
+    local hall = rooms.hall
+    local exit = InteriorLayoutBuilder.SpawnFixture(hall, hall_definition.exterior_exit)
+    if exit ~= nil and exit.components ~= nil and exit.components.teleporter ~= nil then
+        inst.components.teleporter.targetTeleporter = exit
+        exit.components.teleporter.targetTeleporter = inst
+    end
 
-
-
-
-    local POS = {}
-    for x = -length, length do
-        for z = -width, width do
-            if x == -length or x == (length) or z == -width or z == width then
-                table.insert(POS, { x = x, z = z })
-            end
+    for _, connection in ipairs(PlayerHouseLayout.connections) do
+        local source_room = rooms[connection.from]
+        local target_room = rooms[connection.to]
+        local source_door = SpawnPrefab("playerhouse_room_door")
+        local target_door = SpawnPrefab("playerhouse_room_door")
+        source_door.Transform:SetPosition(source_room.x + connection.from_x, 0, source_room.z + connection.from_z)
+        target_door.Transform:SetPosition(target_room.x + connection.to_x, 0, target_room.z + connection.to_z)
+        source_door.Transform:SetRotation(connection.rotation)
+        target_door.Transform:SetRotation(connection.rotation + 180)
+        local direction = RoomExtensions.NormalizeDirection(connection.direction or RoomExtensions.GetWallDirection(source_door, false))
+        if direction ~= nil then
+            RoomExtensions.LinkRoomDoors(
+                source_door,
+                source_room.id,
+                direction,
+                target_door,
+                target_room.id
+            )
         end
     end
 
-
-    local count = 0
-    for _, v in pairs(POS) do
-        count = count + 1
-        local part = SpawnPrefab("house_wall2")
-        part.Transform:SetPosition(x + v.x, 0, z + v.z)
-    end
+    inst.room = true
+end
 
 
-    local part = SpawnPrefab("wallinteriorplayerhouse") -----------墙纸贴图
-    if part ~= nil then
-        part.Transform:SetPosition(x - 6 * size, -1.4, z)
-        part.Transform:SetRotation(90)
-    end
-
-
-
-
-
-    -- local part = SpawnPrefab("playerhouse_room_pedra_cima")
-    -- if part ~= nil then
-    --     part.Transform:SetPosition(x - 6.5, 0, z + 3.9)
-    --     part.Transform:SetRotation(90)
-    -- end
-
-    -- local part = SpawnPrefab("deco_roomglow") ---这个是光亮效果？-------仍然不知道啥用
-    -- if part ~= nil then
-    -- 	part.Transform:SetPosition(x, 0, z)
-    -- end
-
-    -- local part = SpawnPrefab("shelves_cinderblocks")
-    -- if part ~= nil then
-    --     part.Transform:SetPosition(x - 5.5 * size, 0, z - 4 * size)
-    --     part.Transform:SetRotation(-90)
-    -- end
-
-    -- local part = SpawnPrefab("deco_antiquities_wallfish")
-    -- --门也是替代的这个墙纸
-    -- if part ~= nil then
-    --     part.Transform:SetPosition(x - 6.5 * size, 0, z + 4 * size)
-    --     part.Transform:SetRotation(90)
-    -- end
-
-    local part = SpawnPrefab("deco_antiquities_cornerbeam")
-    if part ~= nil then
-        part.Transform:SetPosition(x - 6.5 * size, 0, z - 11.5 * size)
-        --	part.Transform:SetRotation(180)
-        part.Transform:SetScale(1, 1.3, 1) ---设置z没用
-    end
-
-    local part = SpawnPrefab("deco_antiquities_cornerbeam")
-    if part ~= nil then
-        part.Transform:SetPosition(x - 6.5 * size, 0, z + 11.5 * size)
-        part.Transform:SetRotation(90)
-        part.Transform:SetScale(1, 1.3, 1) ---设置z没用
-    end
-
-    local part = SpawnPrefab("deco_antiquities_cornerbeam2")
-    if part ~= nil then
-        part.Transform:SetPosition(x + 6.5 * size, 0, z - 11.5 * size)
-        --	part.Transform:SetRotation(180)
-        part.Transform:SetScale(1, 1.2, 1)
-    end
-
-    local part = SpawnPrefab("deco_antiquities_cornerbeam2")
-    if part ~= nil then
-        part.Transform:SetPosition(x + 6.5 * size, 0, z + 11.5 * size)
-        part.Transform:SetRotation(180)
-        part.Transform:SetScale(1, 1.2, 1) ---设置z没用
-    end
-
-
-    local part = SpawnPrefab("swinging_light_rope_1")
-    if part ~= nil then
-        part.Transform:SetPosition(x - 0 * size, 3, z)
-        part.Transform:SetRotation(-90)
-    end
-
-    local part = SpawnPrefab("window_round_curtains_nails") -----------之前的亮度设置时通过窗户影响光亮的，反而灯没有受影响
-    if part ~= nil then
-        part.Transform:SetPosition(x, 0, z + 11.5 * size)
-    end
-
-    local part = SpawnPrefab("window_round_curtains_nails") -----------之前的亮度设置时通过窗户影响光亮的，反而灯没有受影响
-    if part ~= nil then
-        part.Transform:SetPosition(x, 0, z - 11.5 * size)
-    end
+local function onbuild_interior(inst)
+    return BuildPlayerHouseInterior(inst)
 end
 
 --------------------------------------do teleporter------------------------
@@ -269,6 +204,9 @@ local function OnActivate(inst, doer)
 end
 
 local function ShouldAcceptItem(inst, item)
+    if item.prefab == "packing_permit" then
+        return true
+    end
     if item:HasTag("decoradordecasa") then
         return true
     else
@@ -281,7 +219,19 @@ local function onaccept(inst, giver, item)
     inst.components.teleporter:Activate(item)
 end
 
+local TryPackWithPermit
+
 local function OnGetItemFromPlayer(inst, giver, item)
+    if item ~= nil and item.prefab == "packing_permit" and not inst:HasTag("portadacasa") then
+        TryPackWithPermit(inst, giver, item)
+        return
+    elseif item ~= nil and item.prefab == "packing_permit" then
+        if giver ~= nil and item.components.inventoryitem ~= nil then
+            item.Transform:SetPosition(giver.Transform:GetWorldPosition())
+            item.components.inventoryitem:OnDropped(true)
+        end
+        return
+    end
     if inst.prefab:find("playerhouse_city") then
         if item.prefab:find("player_house_") and item.prefab:find("_craft") then
             local craftname1 = item.prefab:gsub("player_house_", "", 1)
@@ -331,16 +281,38 @@ local function OnHammered(inst, worker)
         if worker and worker.SoundEmitter then
             worker.SoundEmitter:PlaySound("dontstarve/common/destroy_stone")
         end
+        return true
     else
-        inst.components.workable:SetWorkLeft(1)
+        if inst.components.workable ~= nil then
+            inst.components.workable:SetWorkLeft(1)
+        end
+        return false
     end
 end
 
 local function PreHammered(inst, worker)
     if not (inst.components.teleporter ~= nil and inst.components.teleporter:IsBusy()) then
-        OnHammered(inst, worker)
+        return OnHammered(inst, worker)
     else
         inst:ListenForEvent("doneteleporting", OnHammered)
+    end
+end
+
+function TryPackWithPermit(inst, giver, item)
+    if inst.components.teleporter ~= nil and inst.components.teleporter:IsBusy() then
+        if giver ~= nil and item ~= nil and item.components.inventoryitem ~= nil then
+            item.Transform:SetPosition(giver.Transform:GetWorldPosition())
+            item.components.inventoryitem:OnDropped(true)
+        end
+        return
+    end
+
+    local demolished = PreHammered(inst, giver)
+    if demolished and item ~= nil then
+        item:Remove()
+    elseif giver ~= nil and item ~= nil and item.components.inventoryitem ~= nil then
+        item.Transform:SetPosition(giver.Transform:GetWorldPosition())
+        item.components.inventoryitem:OnDropped(true)
     end
 end
 
@@ -454,13 +426,6 @@ local function makehousefn(name, build, bank, data)
         inst.components.trader.acceptnontradable = true
         inst.components.trader.onaccept = OnGetItemFromPlayer
         inst.components.trader.deleteitemonaccept = false
-
-
-        inst:AddComponent("workable")
-        inst.components.workable:SetWorkAction(ACTIONS.HAMMER)
-        inst.components.workable:SetWorkLeft(4)
-        inst.components.workable:SetOnFinishCallback(PreHammered)
-        inst.components.workable:SetOnWorkCallback(onhit)
 
 
         inst:AddComponent("inspectable")

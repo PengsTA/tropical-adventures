@@ -108,9 +108,10 @@ Utils.FnDecorator(Inventory, "GetOverflowContainer", nil, function(rets, self)
     if rets[1] ~= nil and rets[1]:IsFull() ~= true then
         return rets
     end
-    local barco = self:GetEquippedItem(EQUIPSLOTS.BARCO)
-    return (barco ~= nil and barco.components.container and barco.components.container.canbeopened) and
-        { barco.components.container } or rets
+    local sailor = self.inst ~= nil and self.inst.components ~= nil and self.inst.components.sailor or nil
+    local boat = sailor ~= nil and sailor:GetBoat() or nil
+    return (boat ~= nil and boat.components.container and boat.components.container.canbeopened) and
+        { boat.components.container } or rets
 end)
 Inventory.HasMoney = HasMoney
 Inventory.PayMoney = PayMoney

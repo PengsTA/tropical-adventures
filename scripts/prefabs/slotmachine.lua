@@ -2307,11 +2307,12 @@ local sounds =
 
 local function SpawnCritter(inst, critter, lootdropper, pt, delay)
 	delay = delay or GetRandomWithVariance(1, 0.8)
+	local gambler = inst._gambler
 	inst:DoTaskInTime(delay, function()
 		SpawnPrefab("collapse_small").Transform:SetPosition(pt:Get())
 		local spawn = lootdropper:SpawnLootPrefab(critter, pt)
-		if spawn and spawn.components.combat then
-			spawn.components.combat:SetTarget(GetPlayer())
+		if spawn and spawn.components.combat and gambler ~= nil and gambler:IsValid() then
+			spawn.components.combat:SetTarget(gambler)
 		end
 	end)
 end
@@ -2419,6 +2420,7 @@ local function DoneSpinning(inst)
 	inst.busy = false
 	inst.prize = nil
 	inst.prizevalue = nil
+	inst._gambler = nil
 
 	-- print("Slot machine has " .. tostring(inst.coins) .. " dubloons.")
 	inst.sg:GoToState("fake_idle")
@@ -2442,6 +2444,7 @@ local function ShouldAcceptItem(inst, item)
 end
 
 local function OnGetItemFromPlayer(inst, giver, item)
+	inst._gambler = giver
 	giver.components.sanity:DoDelta(-TUNING.SANITY_TINY)
 
 	PickPrize(inst)

@@ -1515,7 +1515,7 @@ return {
         {
           id = 1281,
           name = "",
-          type = "pig_shop_arcane_entrance",
+          type = "pig_shop_arcane",
           shape = "rectangle",
           x = 1212,
           y = 516,
@@ -1541,7 +1541,7 @@ return {
         {
           id = 1304,
           name = "",
-          type = "pig_shop_weapons_entrance",
+          type = "pig_shop_weapons",
           shape = "rectangle",
           x = 644,
           y = 516,
@@ -1749,7 +1749,7 @@ return {
         {
           id = 1432,
           name = "",
-          type = "pig_antiquities_entrance",
+          type = "pig_shop_antiquities",
           shape = "rectangle",
           x = 1028,
           y = 2052,
@@ -1840,7 +1840,7 @@ return {
         {
           id = 1507,
           name = "",
-          type = "pig_shop_tinker_entrance",
+          type = "pig_shop_tinker",
           shape = "rectangle",
           x = 260,
           y = 992,
@@ -1957,7 +1957,7 @@ return {
         {
           id = 1512,
           name = "",
-          type = "pig_antiquities_entrance",
+          type = "pig_shop_antiquities",
           shape = "rectangle",
           x = 1028,
           y = 316,
@@ -1970,7 +1970,7 @@ return {
         {
           id = 1513,
           name = "",
-          type = "hatshop_entrance",
+          type = "pig_shop_hatshop",
           shape = "rectangle",
           x = 828,
           y = 1668,

@@ -1685,6 +1685,7 @@ local STRINGS =
         DEED                                      = "Deed of Home Ownership",
         CONSTRUCTION_PERMIT                       = "Building Permit",
         DEMOLITION_PERMIT                         = "Demolition Permit",
+        PACKING_PERMIT                            = "Packing Permit",
         CONSTRUCTION_PERMIT                       = "House Expansion Permit",
 
         ZEB                                       = "Zeb",
@@ -2904,6 +2905,7 @@ local STRINGS =
 
         CONSTRUCTION_PERMIT                       = "Add that den you've always wanted.",
         DEMOLITION_PERMIT                         = "Destroy that den you've always wanted.",
+        PACKING_PERMIT                            = "Pack up a house for relocation.",
 
         TURF_BEARD_HAIR                           = "Some people just like to do art.",
         TURF_DEEPRAINFOREST_NOCANOPY              = "As tame as wild jungle can be.",

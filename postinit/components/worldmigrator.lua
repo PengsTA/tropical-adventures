@@ -1,4 +1,3 @@
-if GetModConfigData("dev_portal_reconnector") == false then return end
 local WorldMigrator = require "components/worldmigrator"
 local Utils = require "tools/utils"
 
@@ -6,7 +5,14 @@ local function r_print(msg, ...)
     print(string.format(">> Torpical Reconnector(%s): ", tostring(TheShard:GetShardId())), string.format(msg, ...))
 end
 
-Utils.FnDecorator(WorldMigrator, "Activate", function(self)
+Utils.FnDecorator(WorldMigrator, "Activate", function(self, doer)
+    if doer ~= nil and doer:HasTag("player") and doer.components.sailor ~= nil then
+        doer.components.sailor:ForceDisembark("migration")
+    end
+
+    if GetModConfigData("dev_portal_reconnector") == false then
+        return
+    end
     if not self._isreconnect
         and self.id and tonumber(self.id)
         and tonumber(self.id) < 100

@@ -4,6 +4,8 @@
 
 GLOBAL.setmetatable(env, { __index = function(t, k) return GLOBAL.rawget(GLOBAL, k) end, })
 
+GLOBAL.PREFAB_SKINS_SHOULD_NOT_CHANGE = {}
+
 -- verion = 1.09
 -- v1.10 更新 atlas 和 image直接注册到Prefab 方便调用
 --       增加 GetSkinBase  获取皮肤对应的基础prefab
@@ -88,9 +90,18 @@ local FrameSymbol = {}
 local skincharacters = {}
 local default_release_group = -100
 local default_display_order = -1000
+local function AppendUnique(list, value)
+    for _, existing in ipairs(list) do
+        if existing == value then
+            return
+        end
+    end
+    table.insert(list, value)
+end
+
 -- 人物过滤
 local SKIN_AFFINITY_INFO = require("skin_affinity_info")
-function MakeCharacterSkin(base, skinname, data)
+function MakeCharacterSkin(base, skinname, data, defer_registration)
     default_release_group = default_release_group - 1
     default_display_order = default_display_order + 1
     -- 基于哪个人物的  皮肤名称 额外数据
@@ -124,11 +135,11 @@ function MakeCharacterSkin(base, skinname, data)
     if not PREFAB_SKINS[base] then
         PREFAB_SKINS[base] = {}
     end
-    table.insert(PREFAB_SKINS[base], skinname)
+    AppendUnique(PREFAB_SKINS[base], skinname)
     if not SKIN_AFFINITY_INFO[base] then
         SKIN_AFFINITY_INFO[base] = {}
     end
-    table.insert(SKIN_AFFINITY_INFO[base], skinname)
+    AppendUnique(SKIN_AFFINITY_INFO[base], skinname)
 
     -- 创建皮肤预制物
     local prefab_skin = CreatePrefabSkin(skinname, data)
@@ -136,8 +147,10 @@ function MakeCharacterSkin(base, skinname, data)
         prefab_skin.clear_fn = data.clear_fn
     end
     prefab_skin.type = "base"
-    RegisterPrefabs(prefab_skin) -- 注册并加载皮肤的prefab
-    TheSim:LoadPrefabs({ skinname })
+    if not defer_registration then
+        RegisterPrefabs(prefab_skin) -- 注册并加载皮肤的prefab
+        TheSim:LoadPrefabs({ skinname })
+    end
     return prefab_skin
 end
 
@@ -180,7 +193,7 @@ function MakeItemSkinDefaultImage(base, atlas, image)
     itembaseimage[base] = { atlas, (image or base) .. ".tex", "default.tex" }
 end
 
-function MakeItemSkin(base, skinname, data)
+function MakeItemSkin(base, skinname, data, defer_registration)
     default_release_group = default_release_group - 1
     default_display_order = default_display_order + 1
     data.type = nil
@@ -211,15 +224,17 @@ function MakeItemSkin(base, skinname, data)
     if not PREFAB_SKINS[base] then
         PREFAB_SKINS[base] = {}
     end
-    table.insert(PREFAB_SKINS[base], skinname)
+    AppendUnique(PREFAB_SKINS[base], skinname)
     if not PREFAB_SKINS_IDS[base] then
         PREFAB_SKINS_IDS[base] = {}
     end
-    local index = 1
-    for k, v in pairs(PREFAB_SKINS_IDS[base]) do
-        index = math.max(index, v) + 1 --index + 1 --
+    if PREFAB_SKINS_IDS[base][skinname] == nil then
+        local index = 0
+        for _, value in pairs(PREFAB_SKINS_IDS[base]) do
+            index = math.max(index, value)
+        end
+        PREFAB_SKINS_IDS[base][skinname] = index + 1
     end
-    PREFAB_SKINS_IDS[base][skinname] = index
     -- 创建皮肤预制物
     -- data.extra_init_fn = data.init_fn or nil --进行自定义init 和clear
     -- data.extra_clear_fn = data.clear_fn or nil
@@ -242,10 +257,16 @@ function MakeItemSkin(base, skinname, data)
         prefab_skin.imagename = data.image .. ".tex"
     end
     prefab_skin.type = "item"
-    RegisterPrefabs(prefab_skin) -- 注册并加载皮肤的prefab
-    TheSim:LoadPrefabs({ skinname })
+    if not defer_registration then
+        RegisterPrefabs(prefab_skin) -- 注册并加载皮肤的prefab
+        TheSim:LoadPrefabs({ skinname })
+    end
     return prefab_skin
 end
+
+GLOBAL.TROPICAL_SKIN_API = {
+    MakeItemSkin = MakeItemSkin,
+}
 
 local namemaps = {}
 -- 允许 skinname 皮肤 共用base的权限

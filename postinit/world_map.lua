@@ -1,5 +1,8 @@
 --@Author: Peng
 local Utils = require("tools/utils")
+local RoomExtensions = require "tools/interior_room_extensions"
+local RegionDefs = require("tools/regiondefs")
+local WALL_SECTION_BUILD_DISTANCE = 0.35
 
 -----------map related--------------------------
 require("components/map")
@@ -92,28 +95,82 @@ Map.FindVisualNodeAtPoint = function(self, x, y, z, has_tag)
     end
 end
 
+local function GetTopologyTagQuery(map, x, y, z)
+    local node = map:FindVisualNodeAtPoint(x, y, z)
+    local tags = node ~= nil and node.tags or nil
+    return function(tag)
+        return tags ~= nil and table.contains(tags, tag)
+    end
+end
+
+function Map:HasTopologyTagAtPoint(x, y, z, tag)
+    return GetTopologyTagQuery(self, x, y, z)(tag)
+end
+
+function Map:GetPrimaryRegionAtPoint(x, y, z)
+    return RegionDefs.GetPrimaryName(RegionDefs.ResolvePrimaryRegion(GetTopologyTagQuery(self, x, y, z)))
+end
+
+function Map:GetSubregionAtPoint(x, y, z, primary)
+    local has_tag = GetTopologyTagQuery(self, x, y, z)
+    primary = primary or RegionDefs.ResolvePrimaryRegion(has_tag)
+    return RegionDefs.GetSubregionName(RegionDefs.ResolveSubregion(primary, has_tag))
+end
+
+function Map:GetRegionProfileAtPoint(x, y, z)
+    local has_tag = GetTopologyTagQuery(self, x, y, z)
+    local primary = RegionDefs.ResolvePrimaryRegion(has_tag)
+    return {
+        primary = RegionDefs.GetPrimaryName(primary),
+        subregion = RegionDefs.GetSubregionName(RegionDefs.ResolveSubregion(primary, has_tag)),
+        isinterior = self:IsInteriorAtPoint(x, y, z),
+        isdeeprainforest = has_tag("deeprainforest"),
+    }
+end
+
+function Map:IsPrimaryRegionAtPoint(x, y, z, primary)
+    return self:GetPrimaryRegionAtPoint(x, y, z) == RegionDefs.GetPrimaryName(primary)
+end
+
+function Map:IsSubregionAtPoint(x, y, z, subregion)
+    return self:GetSubregionAtPoint(x, y, z) == RegionDefs.GetSubregionName(subregion)
+end
+
+function Map:IsTropicalRegionAtPoint(x, y, z)
+    return RegionDefs.IsTropicalPrimary(self:GetPrimaryRegionAtPoint(x, y, z))
+end
+
+function Map:IsDSTRegionAtPoint(x, y, z)
+    return not self:IsOutsideWorldAtPoint(x, y, z)
+        and self:IsPrimaryRegionAtPoint(x, y, z, RegionDefs.PRIMARY.dst)
+end
+
+-- Legacy map APIs retained for compatibility. New code uses the explicit
+-- topology, primary-region, and subregion queries above.
 Map.IsCityAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "City_Foundation")
+    return self:IsSubregionAtPoint(x, y, z, RegionDefs.SUBREGION.ham_city)
 end
 
 Map.IsCivilizedAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "civilized")
+    return self:HasTopologyTagAtPoint(x, y, z, "civilized")
 end
 
-Map.IsTropicalAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "tropical")
-end
+Map.IsTropicalAreaAtPoint = Map.IsTropicalRegionAtPoint
 
 Map.IsShipwreckedAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "shipwrecked")
+    return self:IsPrimaryRegionAtPoint(x, y, z, RegionDefs.PRIMARY.shipwrecked)
 end
 
 Map.IsHamletAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "hamlet")
+    return self:IsPrimaryRegionAtPoint(x, y, z, RegionDefs.PRIMARY.hamlet)
+end
+
+Map.IsRainforestAreaAtPoint = function(self, x, y, z)
+    return self:IsSubregionAtPoint(x, y, z, RegionDefs.SUBREGION.ham_rainforest)
 end
 
 Map.IsVolcanoAreaAtPoint = function(self, x, y, z)
-    return self:FindVisualNodeAtPoint(x, y, z, "volcano")
+    return self:IsSubregionAtPoint(x, y, z, RegionDefs.SUBREGION.sw_volcano)
 end
 
 local width, height
@@ -126,7 +183,7 @@ function Map:SetTile(tile_x, tile_y, tile, ...)
     if tile == WORLD_TILES.DIRT then
         local x = (tile_x - width / 2) * TILE_SCALE
         local z = (tile_y - height / 2) * TILE_SCALE
-        newtile = (self:IsShipwreckedAreaAtPoint(x, 0, z) and WORLD_TILES.BEACH) or nil
+        newtile = (self:IsPrimaryRegionAtPoint(x, 0, z, RegionDefs.PRIMARY.shipwrecked) and WORLD_TILES.BEACH) or nil
     end
     _SetTile(self, tile_x, tile_y, newtile or tile, ...)
 end
@@ -145,40 +202,79 @@ end
 
 -- local worldwidth, worldheight = TheWorld.Map:GetWorldSize()
 local check_size = 1350
-local function checkxz(x, z)
-    if math.abs(z) >= check_size or math.abs(x) >= check_size then
-        return true
-    else
+local INTERIOR_ORIGIN_PADDING = 128
+local CURRENT_ROOM_SEARCH_PADDING = 24
+
+local function IsPotentialInteriorCoordinate(x, z)
+    if TheWorld == nil or TheWorld.Map == nil then
         return false
     end
+    local width, height = TheWorld.Map:GetSize()
+    if width == nil or height == nil then
+        return false
+    end
+
+    local tile_scale = TILE_SCALE or 4
+    local origin_x = width * tile_scale * 0.5 + INTERIOR_ORIGIN_PADDING
+    local origin_z = height * tile_scale * 0.5 + INTERIOR_ORIGIN_PADDING
+    return x >= origin_x - CURRENT_ROOM_SEARCH_PADDING
+        and z >= origin_z - CURRENT_ROOM_SEARCH_PADDING
+end
+
+local function checkxz(x, z)
+    return math.abs(z) >= check_size
+        or math.abs(x) >= check_size
+        or IsPotentialInteriorCoordinate(x, z)
 end
 
 -------------------来自于猪人部落-------------
-local HamHome = {}     --室内的中心坐标，由于地皮一定在中心
-local DIS = 28         --室内的最大半径
+local HamHome = {} --室内的中心坐标，由于地皮一定在中心
+-- The largest current room shell is 20 x 28. Twenty-four units reaches its
+-- farthest corner plus the invisible wall thickness without probing neighbours.
+local ROOM_SEARCH_RADIUS = CURRENT_ROOM_SEARCH_PADDING
 local lastHamHome = {} --缓冲，短时间内在一个房间附近求值的可能性较大
-local roomsize = TUNING.HAMROOM.roomsize
-local roomtype = TUNING.HAMROOM.roomtype
+local WALL_HALF_THICKNESS = 0.49
+local WALL_END_INSET = 1
+
+local function GetDynamicRoomBounds(v)
+    if v._ta_width == nil or v._ta_depth == nil then
+        return nil
+    end
+
+    local width = v._ta_width:value()
+    local depth = v._ta_depth:value()
+    if width == nil or depth == nil or width <= 0 or depth <= 0 then
+        return nil
+    end
+
+    return width * 0.5, depth * 0.5
+end
 -- 室内可放置建筑，物品不会掉入“水”中
 
 local function CheckNearRoomCenter(x, z, v, checkwall)
-    if checkxz(x, z) then -----判断一下以减少运算
-        local rsize = roomsize[roomtype[v.prefab] or "small"]
-        local xx, yy, zz = v.Transform:GetWorldPosition()
+    local half_width, half_depth = GetDynamicRoomBounds(v)
+    if half_width == nil then
+        return false
+    end
 
-        if not checkwall then
-            if ((x - xx) <= rsize.front and (x - xx) >= -rsize.back and math.abs(z - zz) <= rsize.side) then
-                return true
-            end
-        else
-            if (x - xx) < -(rsize.back - 0.5) and (x - xx) > -(rsize.back + 0.5) and math.abs(z - zz) <= (rsize.side - 2) then ---11
-                return "back"
-            elseif (z - zz) > (rsize.side - 0.5) and (z - zz) < (rsize.side + 0.5) and (x - xx) <= (rsize.front - 1) and (x - xx) >= -(rsize.back - 1) then
-                return "right"
-            elseif (zz - z) > (rsize.side - 0.5) and (zz - z) < (rsize.side + 0.5) and (x - xx) <= (rsize.front - 1) and (x - xx) >= -(rsize.back - 1) then
-                return "left"
-            end
-        end
+    local xx, _, zz = v.Transform:GetWorldPosition()
+    local dx = x - xx
+    local dz = z - zz
+    if not checkwall then
+        return math.abs(dx) <= half_width and math.abs(dz) <= half_depth
+    end
+
+    -- The front edge is intentionally open. It is the room entrance, not a
+    -- wall, so map wall queries only report the rear and two side edges.
+    if math.abs(dx + half_width) <= WALL_HALF_THICKNESS
+        and math.abs(dz) <= half_depth - WALL_END_INSET then
+        return "back"
+    elseif math.abs(dz - half_depth) <= WALL_HALF_THICKNESS
+        and math.abs(dx) <= half_width - WALL_END_INSET then
+        return "right"
+    elseif math.abs(dz + half_depth) <= WALL_HALF_THICKNESS
+        and math.abs(dx) <= half_width - WALL_END_INSET then
+        return "left"
     end
 
     return false
@@ -221,7 +317,7 @@ local function IsHamRoomAtPoint(x, y, z, checkwall)
         end
 
         -- 查找
-        local ents = TheSim:FindEntities(x, 0, z, DIS, { "interior_center" }) --查找地板
+        local ents = TheSim:FindEntities(x, 0, z, ROOM_SEARCH_RADIUS, { "interior_center" }) --查找地板
         if #ents > 0 then
             for _, ent in ipairs(ents) do
                 if ent:IsValid() then
@@ -241,13 +337,17 @@ local function IsHamRoomAtPoint(x, y, z, checkwall)
 end
 
 -----------新的Map函数---------------
-Map.IsHamRoomAtPoint = function(self, x, y, z)
+Map.IsInteriorAtPoint = function(self, x, y, z)
     return IsHamRoomAtPoint(x, y, z, false)
 end
 
-Map.IsHamRoomWallAtPoint = function(self, x, y, z)
+Map.IsHamRoomAtPoint = Map.IsInteriorAtPoint
+
+Map.IsInteriorWallAtPoint = function(self, x, y, z)
     return IsHamRoomAtPoint(x, y, z, true) --true则检查墙点
 end
+
+Map.IsHamRoomWallAtPoint = Map.IsInteriorWallAtPoint
 
 Map.IsOutsideWorldAtPoint = function(self, x, y, z)
     if checkxz(x, z) then --判断的基础，也许光判断z就行了
@@ -258,14 +358,10 @@ end
 
 
 Map.IsNotForestAreaAtPoint = function(self, x, y, z)
-    return self:IsOutsideWorldAtPoint(x, y, z) or
-        self:IsTropicalAreaAtPoint(x, y, z)
+    return not self:IsDSTRegionAtPoint(x, y, z)
 end
 
-Map.IsForestAreaAtPoint = function(self, x, y, z)
-    return not self:IsOutsideWorldAtPoint(x, y, z) and
-        not self:IsTropicalAreaAtPoint(x, y, z)
-end
+Map.IsForestAreaAtPoint = Map.IsDSTRegionAtPoint
 
 
 
@@ -315,32 +411,30 @@ local banrecipe = { "playerhouse_city", "pighouse_city", "city_lamp", "pig_guard
 }
 
 local old_CanDeployRecipeAtPoint = Map.CanDeployRecipeAtPoint
-Map.CanDeployRecipeAtPoint = function(self, pt, recipe, rot)
+Map.CanDeployRecipeAtPoint = function(self, pt, recipe, rot, ...)
     if recipe.build_mode == "insidedoor" then
         local pt_x, pt_y, pt_z = pt:Get()
-        local isbackwall = IsHamRoomAtPoint(pt_x, pt_y, pt_z, true)
-        if isbackwall == "back" then
-            return true
-        else
-            return false
-        end
+        -- Expansion doors can use all four logical wall centers, including the
+        -- open front side.
+        return RoomExtensions.GetWallBuildInfoAtPoint(pt_x, pt_y, pt_z, { center_only = true, rendered_walls_only = false }) ~= nil
     elseif recipe.build_mode == "wallsection" then
         local pt_x, pt_y, pt_z = pt:Get()
-        local iswall = IsHamRoomAtPoint(pt_x, pt_y, pt_z, true)
-        if iswall then
-            return true
-        else
-            return false
-        end
+        return RoomExtensions.GetWallBuildInfoAtPoint(pt_x, pt_y, pt_z, {
+            center_only = false,
+            wall_distance = WALL_SECTION_BUILD_DISTANCE,
+        }) ~= nil
+    elseif recipe.build_mode == "interior" then
+        local pt_x, pt_y, pt_z = pt:Get()
+        return IsHamRoomAtPoint(pt_x, pt_y, pt_z, false)
     elseif tableutil.has_component(banrecipe, recipe.name) or string.find(recipe.name, "pig_shop") then
         local pt_x, pt_y, pt_z = pt:Get()
         local isroom = IsHamRoomAtPoint(pt_x, pt_y, pt_z, false)
         if isroom then
             return false
         else
-            return old_CanDeployRecipeAtPoint(self, pt, recipe, rot)
+            return old_CanDeployRecipeAtPoint(self, pt, recipe, rot, ...)
         end
     else
-        return old_CanDeployRecipeAtPoint(self, pt, recipe, rot)
+        return old_CanDeployRecipeAtPoint(self, pt, recipe, rot, ...)
     end
 end

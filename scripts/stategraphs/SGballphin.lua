@@ -209,6 +209,19 @@ CommonStates.AddSleepStates(states,
 })
 
 CommonStates.AddFrozenStates(states)
+states[#states + 1] = State{
+    name = "eat",
+    tags = { "busy" },
+    onenter = function(inst)
+        inst.Physics:Stop()
+        inst.AnimState:PlayAnimation("sleep_pre")
+        inst.AnimState:PushAnimation("sleep_loop", false)
+    end,
+    timeline = {
+        TimeEvent(10 * FRAMES, function(inst) inst:PerformBufferedAction() end),
+        TimeEvent(60 * FRAMES, function(inst) inst.sg:GoToState("idle") end),
+    },
+}
 CommonStates.AddSimpleActionState(states, "gohome", "idle", 4 * FRAMES, { "busy" })
   
 return StateGraph("ballphin", states, events, "idle", actionhandlers)

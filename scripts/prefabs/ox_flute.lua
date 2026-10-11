@@ -10,8 +10,8 @@ end
 local OX_FLUTE_USES = 5
 
 local function OnPlayed(inst, musician, instrument)
-    inst:DoTaskInTime(2, function()
-        TheWorld:PushEvent("ms_forceprecipitation")
+    TheWorld:DoTaskInTime(2, function(world)
+        world:PushEvent("ms_forceprecipitation")
     end)
 end
 
@@ -42,7 +42,6 @@ local function fn(Sim)
     inst:AddComponent("instrument")
     inst.components.instrument:SetAssetOverrides("ox_flute", "ox_flute01", "dontstarve_DLC002/common/ox_flute")
     inst.components.instrument.onplayed = OnPlayed
-    --	inst.components.instrument.sound_noloop = "dontstarve_DLC002/common/ox_flute"
 
     inst:AddComponent("tool")
     inst.components.tool:SetAction(ACTIONS.PLAY)

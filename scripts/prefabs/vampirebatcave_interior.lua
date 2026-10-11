@@ -1,5 +1,8 @@
 require "prefabutil"
 
+local InteriorRoomBuilder = require "tools/interior_room_builder"
+local ROOM_SIZES = require("datadefs/interior").sizes
+
 local assets =
 {
 	Asset("ANIM", "anim/pisohamlet.zip"),
@@ -33,63 +36,12 @@ local function entrance()
 
 	--------------------------------------------------inicio da criacao---------------------------------------
 
-	local x = 0
-	local y = 0
-	local z = 0
-	if TheWorld.components.contador then TheWorld.components.contador:Increment(1) end
-	if TheWorld.components.contador then
-		local numerounico = TheWorld.components.contador.count
-
-		x = TheWorld.components.contador:GetX()
-		y = 0
-		z = TheWorld.components.contador:GetZ()
-		------------------------------------------------------------------------------------------------------
-		inst.exit = SpawnPrefab("roc_cave_door_entrada")
-		inst.exit.Transform:SetPosition(TheWorld.components.contador:GetX() - 8, 0, TheWorld.components.contador:GetZ())
-	end
-	---------------------------cria a parede inicio------------------------------------------------------------------	
-	local tipodemuro = "wall_invisible"
-	---------------------------cria a parede inicio -------------------------------------
-	---------------------------parade dos aposento------------------------------------------------------------------	
-
-	x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
+	local room = TheWorld.components.interior_manager:Allocate(nil, "vampirebat_cave")
+	local shell = InteriorRoomBuilder.BuildShell(room, ROOM_SIZES.vampirebat_cave)
+	local x, y, z = room.x, 0, room.z
+	inst.exit = SpawnPrefab("roc_cave_door_entrada")
+	inst.exit.Transform:SetPosition(x - 8, 0, z)
 	inst.Transform:SetPosition(x, 0, z)
-
-	local POS = {}
-	for x = -9.5, 9.5 do
-		for z = -13.5, 13.5 do
-			if x == -9.5 or x == 9.5 or z == -13.5 or z == 13.5 then
-				table.insert(POS, { x = x, z = z })
-			end
-		end
-	end
-
-
-	local count = 0
-	for _, v in pairs(POS) do
-		count = count + 1
-		local part = SpawnPrefab(tipodemuro)
-		part.Transform:SetPosition(x + v.x, 0, z + v.z)
-	end
-
-	----------------parede do fundo---------------------------------------------
-	local part = SpawnPrefab("wallinteriorvampirebatcave")
-	if part ~= nil then
-		part.Transform:SetPosition(x - 3.8, 0, z)
-		part.Transform:SetRotation(0)
-		if part.components.health ~= nil then
-			part.components.health:SetPercent(1)
-		end
-	end
-
-	------------------------piso--------------------------------
-	local part = SpawnPrefab("vampirebatcave_floor")
-	if part ~= nil then
-		part.Transform:SetPosition(x - 4.3, 0, z)
-		if part.components.health ~= nil then
-			part.components.health:SetPercent(1)
-		end
-	end
 	---------------------------------itens de dentro----------------------------
 	local height = 18
 	local width = 26
@@ -364,6 +316,7 @@ local function entrance()
 	end
 
 	--------------------------------------------cria caverna e conecta com a saida-------------------------------------------------------	
+	InteriorRoomBuilder.FitContents(shell, { inst })
 
 	inst:DoTaskInTime(2, function(inst)
 		local portaentrada = SpawnPrefab("vampirebatcave")

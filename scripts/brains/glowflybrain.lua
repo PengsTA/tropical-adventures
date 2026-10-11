@@ -3,6 +3,7 @@ require "behaviours/leash"
 require "behaviours/doaction"
 require "behaviours/chaseandattack"
 require "behaviours/runaway"
+local ClimateProfiles = require("tools/climateprofiles")
 
 local MAX_LEASH_DIST = 40
 local MAX_WANDER_DIST = 40
@@ -24,7 +25,7 @@ local function GoHomeAction(inst)
 end
 
 local function ShouldGoHome(inst)
-    return TheWorld.state.isday or TheWorld.state.iswinter
+    return TheWorld.state.isday or ClimateProfiles.IsHamletHumid(TheWorld.state)
 end
 
 local GlowflyBrain = Class(Brain, function(self, inst)

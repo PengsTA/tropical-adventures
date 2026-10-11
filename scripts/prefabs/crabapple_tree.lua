@@ -6,7 +6,6 @@ local assets =
 
 local prefabs_tree =
 {
-    "gooseberry",
     "log",
     "twigs",
     "crabapple_stump",
@@ -23,29 +22,6 @@ local prefabs_burnt =
     "charcoal",
 }
 
-local function onregenfn(inst)
-    inst.AnimState:PlayAnimation("grow")
-    inst.AnimState:PushAnimation("idle_loop", true)
-    inst.AnimState:Show("BANANA")
-end
-
-local function makefullfn(inst)
-    inst.AnimState:PlayAnimation("idle_loop", true)
-    inst.AnimState:Show("BANANA")
-end
-
-local function onpickedfn(inst)
-    inst.SoundEmitter:PlaySound("dontstarve/wilson/pickup_reeds")
-    inst.AnimState:PlayAnimation("pick")
-    inst.AnimState:PushAnimation("idle_loop")
-    inst.AnimState:Hide("BANANA")
-end
-
-local function makeemptyfn(inst)
-    inst.AnimState:PlayAnimation("idle_loop")
-    inst.AnimState:Hide("BANANA")
-end
-
 local function setupstump(inst)
     SpawnPrefab("crabapple_stump").Transform:SetPosition(inst.Transform:GetWorldPosition())
     inst:Remove()
@@ -61,11 +37,6 @@ local function tree_chopped(inst, worker)
     inst.components.lootdropper:SpawnLootPrefab("log")
     inst.components.lootdropper:SpawnLootPrefab("twigs")
     inst.components.lootdropper:SpawnLootPrefab("twigs")
-    inst.AnimState:Hide("BANANA")
-    if inst.components.pickable ~= nil and inst.components.pickable.canbepicked then
-        inst.components.lootdropper:SpawnLootPrefab("gooseberry")
-    end
-    inst.components.pickable.caninteractwith = false
     inst.components.workable:SetWorkable(false)
     inst.AnimState:PlayAnimation("fall")
     inst:ListenForEvent("animover", setupstump)
@@ -79,35 +50,23 @@ local function tree_chop(inst, worker)
     end
 end
 
-local function tree_startburn(inst)
-    if inst.components.pickable ~= nil then
-        inst.components.pickable.caninteractwith = false
-    end
-end
-
 local function tree_burnt(inst)
     local burnt_tree = SpawnPrefab("crabapple_burnt")
     burnt_tree.Transform:SetPosition(inst.Transform:GetWorldPosition())
-    burnt_tree.no_banana = inst.components.pickable == nil or not inst.components.pickable.canbepicked
-    if burnt_tree.no_banana then
-        burnt_tree.AnimState:Hide("BANANA")
-    end
+    burnt_tree.no_banana = true
+    burnt_tree.AnimState:Hide("BANANA")
     inst:Remove()
 end
 
 local function tree_onsave(inst, data)
     if inst.components.burnable ~= nil and inst.components.burnable:IsBurning() then
         data.burnt = true
-        data.no_banana = inst.components.pickable == nil or not inst.components.pickable.canbepicked
     end
 end
 
 local function tree_onload(inst, data)
     if data ~= nil then
         if data.burnt then
-            if data.no_banana and inst.components.pickable ~= nil then
-                inst.components.pickable.canbepicked = false
-            end
             tree_burnt(inst)
         end
     end
@@ -131,6 +90,7 @@ local function tree_fn()
     inst.AnimState:SetBank("cave_banana_tree")
     inst.AnimState:SetBuild("crabapple_tree_build")
     inst.AnimState:PlayAnimation("idle_loop", true)
+    inst.AnimState:Hide("BANANA")
 
     inst:AddTag("plant")
 
@@ -141,14 +101,6 @@ local function tree_fn()
     end
 
     inst.AnimState:SetTime(math.random() * 2)
-
-    inst:AddComponent("pickable")
-    inst.components.pickable.picksound = "dontstarve/wilson/pickup_reeds"
-    inst.components.pickable:SetUp("gooseberry", TUNING.CAVE_BANANA_GROW_TIME)
-    inst.components.pickable.onregenfn = onregenfn
-    inst.components.pickable.onpickedfn = onpickedfn
-    inst.components.pickable.makeemptyfn = makeemptyfn
-    inst.components.pickable.makefullfn = makefullfn
 
     inst:AddComponent("workable")
     inst.components.workable:SetWorkAction(ACTIONS.CHOP)
@@ -162,10 +114,8 @@ local function tree_fn()
     ---------------------
     MakeMediumBurnable(inst)
     MakeSmallPropagator(inst)
-    MakeNoGrowInWinter(inst)
     ---------------------
 
-    inst.components.burnable:SetOnIgniteFn(tree_startburn)
     inst.components.burnable:SetOnBurntFn(tree_burnt)
 
     inst.OnSave = tree_onsave

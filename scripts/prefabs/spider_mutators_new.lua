@@ -1,5 +1,3 @@
-local prefabs = {}
-
 local assets =
 {
     Asset("ANIM", "anim/spider_mutator_new.zip"),
@@ -7,9 +5,10 @@ local assets =
 
 local mutator_targets =
 {
-    "tropical",
-    "frost",
+    tropical = "spider_tropical",
 }
+
+local mutator_names = { "tropical" }
 
 local function MakeMutatorFn(mutator_target)
     local inst = CreateEntity()
@@ -50,11 +49,7 @@ local function MakeMutatorFn(mutator_target)
     inst.components.edible.sanityvalue = -TUNING.SANITY_SMALL
 
     inst:AddComponent("spidermutator")
-    inst.components.spidermutator:SetMutationTarget("spider_" .. mutator_target)
-
-    if mutator_target and mutator_target == "frost" then
-        inst.components.spidermutator:SetMutationTarget("spider_snow2")
-    end
+    inst.components.spidermutator:SetMutationTarget(mutator_targets[mutator_target])
 
     MakeHauntableLaunch(inst)
 
@@ -66,14 +61,11 @@ local function MakeMutatorFn(mutator_target)
     return inst
 end
 
-for i, mutator_target in ipairs(mutator_targets) do
-    table.insert(prefabs, "spider_" .. mutator_target)
-end
-
 local mutator_prefabs = {}
-for i, mutator_target in ipairs(mutator_targets) do
+for _, mutator_target in ipairs(mutator_names) do
     table.insert(mutator_prefabs,
-        Prefab("mutator_" .. mutator_target, function() return MakeMutatorFn(mutator_target) end, assets, prefabs))
+        Prefab("mutator_" .. mutator_target, function() return MakeMutatorFn(mutator_target) end, assets,
+            { mutator_targets[mutator_target] }))
 end
 
 return unpack(mutator_prefabs)

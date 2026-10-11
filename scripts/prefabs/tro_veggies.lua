@@ -44,9 +44,6 @@ TRO_VEGGIES =
 
     aloe = MakeVegStats(COMMON, TUNING.CALORIES_TINY, TUNING.HEALING_MEDSMALL, TUNING.PERISH_FAST, 0,
         TUNING.CALORIES_SMALL, TUNING.HEALING_SMALL, TUNING.PERISH_SLOW, 0),
-    -- gooseberry = MakeVegStats(0, TUNING.CALORIES_SMALL, TUNING.HEALING_TINY, TUNING.PERISH_MED, 0,
-    --     TUNING.CALORIES_SMALL, TUNING.HEALING_SMALL, TUNING.PERISH_FAST, 0,
-    --     { "small", 0.05, 0.9 }, { "med", nil, 0.75 }),
     sweet_potato = MakeVegStats(COMMON, TUNING.CALORIES_SMALL, TUNING.HEALING_TINY, TUNING.PERISH_MED, 0,
         TUNING.CALORIES_SMALL, TUNING.HEALING_SMALL, TUNING.PERISH_FAST, 0),
 
@@ -86,7 +83,6 @@ local SEEDLESS =
     berries_juicy = true,
     fig = true,
     kelp = true,
-    gooseberry = true,
     blueberries = true,
 }
 
@@ -720,9 +716,6 @@ local function MakeVeggie(name, has_seeds)
 
         end
         if name == "radish" then
-
-        end
-        if name == "gooseberry" then
 
         end
         if name == "blueberries" then

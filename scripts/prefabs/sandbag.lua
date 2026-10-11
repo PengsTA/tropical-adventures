@@ -257,5 +257,5 @@ local function fn()
 end
 
 return Prefab("sandbag", fn, assets, prefabs),
-    Prefab("sandbag_item", itemfn, assets, { "sandbag_", "sandbag_item_placer" }),
+    Prefab("sandbag_item", itemfn, assets, { "sandbag", "sandbag_item_placer" }),
     MakePlacer("sandbag_item_placer", "sandbag_small", "sandbag_small", "full", false, false, true, 1.0, nil, "eight")

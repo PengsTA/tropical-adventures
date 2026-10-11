@@ -33,33 +33,31 @@ local FogOver = Class(Widget, function(self, owner)
     self.time = self.transitiontime
 
     self:Hide()
-
-    self:StartUpdating()
+    self:StopUpdating()
 end)
 
 function FogOver:UpdateState(foggroggylevel)
-    self.foggroggylevel = foggroggylevel
-    if self.foggroggylevel and self.foggroggylevel > 0 then
-        -- -- -- print("startupdatingfoggy in widget")
-        -- -- -- print(self.foggroggylevel)
-        self:StartUpdating()
+    self.foggroggylevel = foggroggylevel or 0
+    self:StartUpdating()
+    if self.foggroggylevel > 0 then
         self:Show()
     end
 end
 
 function FogOver:OnUpdate(dt)
-    if self.foggroggylevel - self.nowlevel > 0.01 then
-        self.nowlevel = self.nowlevel + 0.01
-    elseif self.nowlevel - self.foggroggylevel > 0.01 then
-        self.nowlevel = self.nowlevel - 0.01
-    end
+    local step = dt / self.transitiontime
+    self.nowlevel = self.nowlevel < self.foggroggylevel
+        and math.min(self.nowlevel + step, self.foggroggylevel)
+        or math.max(self.nowlevel - step, self.foggroggylevel)
 
     self.bg:GetAnimState():SetMultColour(1, 1, 1, self.nowlevel / 2)
     self.bg2:SetTint(1, 1, 1, self.nowlevel)
 
     if self.nowlevel <= 0 then
         self:Hide()
-        -- self.owner:DoTaskInTime(10, function() self:StopUpdating() end)
+        if self.foggroggylevel <= 0 then
+            self:StopUpdating()
+        end
     else
         self:Show()
     end

@@ -69,25 +69,34 @@ local function playfallsound(inst)
 end
 
 local function onhitground_hail(inst)
-    MakeInventoryPhysics(inst)
-    local map = TheWorld.Map
     local x, y, z = inst.Transform:GetWorldPosition()
-    local ground = map:GetTile(map:GetTileCoordsAtPoint(x, y, z))
+    inst:RemoveEventCallback("on_landed", onhitground_hail)
+    MakeInventoryPhysics(inst)
+    inst.components.inventoryitem.canbepickedup = true
 
-    if TileGroupManager:IsOceanTile(ground) --[[ground == GROUND.OCEAN_COASTAL or
-        ground == GROUND.OCEAN_COASTAL_SHORE or
-        ground == GROUND.OCEAN_SWELL or
-        ground == GROUND.OCEAN_ROUGH or
-        ground == GROUND.OCEAN_BRINEPOOL or
-        ground == GROUND.OCEAN_BRINEPOOL_SHORE or
-        ground == GROUND.OCEAN_WATERLOG or
-        ground == GROUND.OCEAN_HAZARDOUS]] then
+    if TheWorld.Map:IsOceanAtPoint(x, y, z) and inst:GetCurrentPlatform() == nil then
+        local splash = SpawnPrefab("frogsplash")
+        if splash ~= nil then
+            splash.Transform:SetPosition(x, y, z)
+        end
         inst:Remove()
-        local bolha = SpawnPrefab("frogsplash")
-        bolha.Transform:SetPosition(x, y, z)
+    elseif math.random() < TUNING.HURRICANE_HAIL_BREAK_CHANCE then
+        inst:Remove()
     else
         playfallsound(inst)
     end
+end
+
+local function StartFalling(inst, x, y, z)
+    inst.Physics:SetCollisionGroup(COLLISION.CHARACTERS)
+    inst.Physics:ClearCollisionMask()
+    inst.Physics:CollidesWith(COLLISION.GROUND)
+    inst.Physics:CollidesWith(COLLISION.OBSTACLES)
+    inst.Physics:CollidesWith(COLLISION.CHARACTERS)
+    inst.Physics:Teleport(x, y or 35, z)
+    inst.components.inventoryitem.canbepickedup = false
+    inst:ListenForEvent("on_landed", onhitground_hail)
+    inst.components.inventoryitem:SetLanded(false, true)
 end
 
 local function hailfn(Sim)
@@ -144,7 +153,7 @@ local function hailfn(Sim)
 
     inst.components.inventoryitem:SetOnPickupFn(onstopfiremelt)
 
-    inst:DoTaskInTime(0.4, onhitground_hail)
+    inst.StartFalling = StartFalling
     inst.OnSave = onsave
     inst.OnLoad = onload
     MakeHauntableLaunchAndSmash(inst)

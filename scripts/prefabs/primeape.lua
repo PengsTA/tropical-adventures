@@ -1,3 +1,4 @@
+local CombatTargets = require("tools/combat_targets")
 local assets =
 {
     Asset("ANIM", "anim/kiki_basic.zip"),
@@ -137,13 +138,10 @@ local function IsNonWerePig(dude)
 end
 
 local function OnAttacked(inst, data)
-    --print(inst, "OnAttacked")
-    local attacker = data.attacker
+    local attacker = CombatTargets.GetAttacker(data)
     inst:ClearBufferedAction()
 
-    if attacker and attacker.prefab == "deciduous_root" and attacker.owner ~= nil then
-        OnAttackedByDecidRoot(inst, attacker.owner)
-    elseif attacker and attacker.prefab ~= "deciduous_root" then
+    if attacker then
         inst.components.combat:SetTarget(attacker)
 
         if not (attacker:HasTag("monkey")) then

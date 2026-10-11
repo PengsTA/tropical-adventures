@@ -90,7 +90,29 @@ AddRecipe2("pugaliskfountain_made",
 	},
 	{ "STRUCTURES", "LEGACY", "SUMMER" })
 
+AddRecipe2("seaworthy",
+	{ Ingredient("nightmarefuel", 4), Ingredient("livinglog", 4), Ingredient("sunken_boat_trinket_4", 1),
+		Ingredient("transistor", 4), Ingredient("gears", 4) },
+	TECH.MAGIC_THREE,
+	{
+		min_spacing = 3.2,
+		placer = "seaworthy_placer",
+		atlas = "images/inventoryimages/inventory_shipwrecked.xml",
+		image = "shipwrecked_entrance.tex",
+	},
+	{ "STRUCTURES", "MAGIC" })
 
+AddRecipe2("skyworthy",
+	{ Ingredient("nightmarefuel", 4), Ingredient("livinglog", 4), Ingredient("trinket_giftshop_4", 1),
+		Ingredient("transistor", 4), Ingredient("gears", 4) },
+	TECH.MAGIC_THREE,
+	{
+		min_spacing = 3.2,
+		placer = "skyworthy_placer",
+		atlas = "images/inventoryimages/inventory_hamlet.xml",
+		image = "portal_ham.tex",
+	},
+	{ "STRUCTURES", "MAGIC" })
 
 AddRecipe2("armorvortexcloak", { Ingredient("ancient_remnant", 5), Ingredient("armor_sanity", 1) }, TECH.LOST, {
 
@@ -638,9 +660,13 @@ AddRecipe2("obsidian_boatcannon",
 			{ recipe = "obsidiancoconade", filter = "OBSIDIAN" }
 		}
 	}, { "NAUTICAL", "OBSIDIAN" })
--- AddRecipe2("trawlnet", { Ingredient("bamboo", 2), Ingredient("rope", 3) }, TECH.SEAFARING_TWO,
--- 	{},
--- 	{ "NAUTICAL" })
+AddRecipe2("trawlnet", { Ingredient("bamboo", 2), Ingredient("rope", 3) }, TECH.SEAFARING_TWO,
+	{
+		sort_after = {
+			{ recipe = "malbatrossail", filter = "NAUTICAL" },
+		}
+	},
+	{ "NAUTICAL" })
 AddRecipe2("armor_lifejacket",
 	{ Ingredient("fabric", 2), Ingredient("vine", 2), Ingredient("messagebottleempty_sw", 2) },
 	TECH.SEAFARING_TWO, {
@@ -667,9 +693,15 @@ AddRecipe2("porto_buoy",
 			{ recipe = "boat_lantern", filter = "LIGHT" }
 		}
 	}, { "LIGHT", "NAUTICAL", "STRUCTURES" })
--- AddRecipe2("quackeringram",
--- 	{ Ingredient("quackenbeak", 1), Ingredient("bamboo", 4), Ingredient("rope", 4) },
--- 	TECH.SEAFARING_TWO, {}, { "NAUTICAL" })
+AddRecipe2("quackeringram",
+	{ Ingredient("quackenbeak", 1), Ingredient("bamboo", 4), Ingredient("rope", 4) },
+	TECH.SEAFARING_TWO,
+	{
+		sort_after = {
+			{ recipe = "boatcannon", filter = "NAUTICAL" },
+		}
+	},
+	{ "NAUTICAL" })
 AddRecipe2("porto_tar_extractor",
 	{ Ingredient("coconut", 2), Ingredient("bamboo", 4), Ingredient("limestone", 4) },
 	TECH.SEAFARING_TWO, {
@@ -829,14 +861,6 @@ AddRecipe2("mutator_tropical", { Ingredient("mutator_warrior", 1), Ingredient("v
 			{ recipe = "mutator_warrior", filter = "CHARACTER" }
 		}
 	}, { "CHARACTER" })
-AddRecipe2("mutator_frost", { Ingredient("mutator_moon", 1), Ingredient("ice", 3) }, TECH.NONE,
-	{
-		builder_tag = "wurt",
-		sort_after = {
-			{ recipe = "mutator_moon", filter = "CHARACTER" }
-		}
-	}, { "CHARACTER" })
-
 -- 	{ --[[nounlock = true]] }, { "HAMLET" })
 AddRecipe2("securitycontract", { Ingredient("oinc", 10) }, TECH.CITY_ONE, { nounlock = false },
 	{ "HAMLET" })
@@ -860,11 +884,11 @@ AddRecipe2("pighouse_city", { Ingredient("boards", 4), Ingredient("cutstone", 3)
 	TECH.CITY_ONE,
 	{ nounlock = false, min_spacing = 3.2, placer = "pighouse_city_placer", image = "pighouse_city.tex" },
 	{ "HAMLET" })
-AddRecipe2("pig_shop_deli_entrance", { Ingredient("boards", 4), Ingredient("honeyham", 1), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_deli", { Ingredient("boards", 4), Ingredient("honeyham", 1), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{ nounlock = false, min_spacing = 3.2, placer = "pig_shop_deli_placer", image = "pig_shop_deli.tex" },
 	{ "HAMLET" })
-AddRecipe2("pig_shop_general_entrance", { Ingredient("boards", 4), Ingredient("axe", 3), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_general", { Ingredient("boards", 4), Ingredient("axe", 3), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -873,7 +897,7 @@ AddRecipe2("pig_shop_general_entrance", { Ingredient("boards", 4), Ingredient("a
 		placer = "pig_shop_general_placer",
 		image = "pig_shop_general.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_hoofspa_entrance", { Ingredient("boards", 4), Ingredient("bandage", 3), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_hoofspa", { Ingredient("boards", 4), Ingredient("bandage", 3), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -882,7 +906,7 @@ AddRecipe2("pig_shop_hoofspa_entrance", { Ingredient("boards", 4), Ingredient("b
 		placer = "pig_shop_hoofspa_placer",
 		image = "pig_shop_hoofspa.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_produce_entrance", { Ingredient("boards", 4), Ingredient("eggplant", 3), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_produce", { Ingredient("boards", 4), Ingredient("eggplant", 3), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -891,7 +915,7 @@ AddRecipe2("pig_shop_produce_entrance", { Ingredient("boards", 4), Ingredient("e
 		placer = "pig_shop_produce_placer",
 		image = "pig_shop_produce.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_florist_entrance", { Ingredient("boards", 4), Ingredient("petals", 12), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_florist", { Ingredient("boards", 4), Ingredient("petals", 12), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -900,7 +924,7 @@ AddRecipe2("pig_shop_florist_entrance", { Ingredient("boards", 4), Ingredient("p
 		placer = "pig_shop_florist_placer",
 		image = "pig_shop_florist.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_antiquities_entrance",
+AddRecipe2("pig_shop_antiquities",
 	{ Ingredient("boards", 4), Ingredient("ballpein_hammer", 3), Ingredient("pigskin", 4) }, TECH.CITY_ONE,
 	{
 
@@ -909,7 +933,7 @@ AddRecipe2("pig_antiquities_entrance",
 		placer = "pig_shop_antiquities_placer",
 		image = "pig_shop_antiquities.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_arcane_entrance",
+AddRecipe2("pig_shop_arcane",
 	{ Ingredient("boards", 4), Ingredient("nightmarefuel", 1), Ingredient("pigskin", 4) }, TECH.CITY_ONE,
 	{
 
@@ -919,7 +943,7 @@ AddRecipe2("pig_shop_arcane_entrance",
 		image =
 		"pig_shop_arcane.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_weapons_entrance", { Ingredient("boards", 4), Ingredient("spear", 3), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_weapons", { Ingredient("boards", 4), Ingredient("spear", 3), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -928,7 +952,7 @@ AddRecipe2("pig_shop_weapons_entrance", { Ingredient("boards", 4), Ingredient("s
 		placer = "pig_shop_weapons_placer",
 		image = "pig_shop_weapons.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_academy_entrance", { Ingredient("boards", 4), Ingredient("cutstone", 3), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_academy", { Ingredient("boards", 4), Ingredient("cutstone", 3), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -937,7 +961,7 @@ AddRecipe2("pig_academy_entrance", { Ingredient("boards", 4), Ingredient("cutsto
 		placer = "pig_shop_academy_placer",
 		image = "pig_shop_academy.tex"
 	}, { "HAMLET" })
-AddRecipe2("hatshop_entrance", { Ingredient("boards", 4), Ingredient("tophat", 2), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_hatshop", { Ingredient("boards", 4), Ingredient("tophat", 2), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -946,11 +970,11 @@ AddRecipe2("hatshop_entrance", { Ingredient("boards", 4), Ingredient("tophat", 2
 		placer = "pig_shop_hatshop_placer",
 		image = "pig_shop_hatshop.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_bank_entrance",
+AddRecipe2("pig_shop_bank",
 	{ Ingredient("cutstone", 4), Ingredient("oinc", 100), Ingredient("pigskin", 4) }, TECH.CITY_ONE,
 	{ nounlock = false, min_spacing = 3.2, placer = "pig_shop_bank_placer", image = "pig_shop_bank.tex" },
 	{ "HAMLET" })
-AddRecipe2("pig_shop_tinker_entrance", { Ingredient("magnifying_glass", 2), Ingredient("pigskin", 4) },
+AddRecipe2("pig_shop_tinker", { Ingredient("magnifying_glass", 2), Ingredient("pigskin", 4) },
 	TECH.CITY_ONE,
 	{
 
@@ -960,7 +984,7 @@ AddRecipe2("pig_shop_tinker_entrance", { Ingredient("magnifying_glass", 2), Ingr
 		image =
 		"pig_shop_tinker.tex"
 	}, { "HAMLET" })
-AddRecipe2("pig_shop_cityhall_player_entrance",
+AddRecipe2("pig_shop_cityhall_player",
 	{ Ingredient("boards", 4), Ingredient("goldnugget", 4), Ingredient("pigskin", 4) }, TECH.CITY_ONE,
 	{
 
@@ -1074,6 +1098,17 @@ AddRecipe2("player_house_turret_craft", { Ingredient("oinc", 20) }, TECH.HOME_ON
 AddRecipe2("player_house_villa_craft", { Ingredient("oinc", 30) }, TECH.HOME_ONE, {}, { "INTERIOR" })
 AddRecipe2("player_house_manor_craft", { Ingredient("oinc", 30) }, TECH.HOME_ONE, {}, { "INTERIOR" })
 
+-- Ported from the 31addtest house-extension flow. A permit is offered to an
+-- unlinked interior door to create and connect the adjacent room.
+AddRecipe2("construction_permit", { Ingredient("oinc", 50) }, TECH.HOME_ONE,
+	{ nounlock = true, no_deconstruction = true }, { "INTERIOR" })
+
+AddRecipe2("demolition_permit", { Ingredient("oinc", 25) }, TECH.HOME_ONE,
+	{ nounlock = true, no_deconstruction = true }, { "INTERIOR" })
+
+AddRecipe2("packing_permit", { Ingredient("oinc", 25) }, TECH.HOME_ONE,
+	{ nounlock = true, no_deconstruction = true }, { "INTERIOR" })
+
 
 
 
@@ -1114,6 +1149,24 @@ AddRecipe2("round_door", { Ingredient("oinc", 25) }, TECH.HOME_ONE,
 		placer = "round_door_placer",
 		build_mode = "insidedoor"
 	}, { "INTERIOR" })
+
+local function AddInteriorExpansionDoorRecipe(name, cost)
+	if AllRecipes[name] ~= nil then
+		return
+	end
+	AddRecipe2(name, { Ingredient("oinc", cost) }, TECH.HOME_ONE,
+		{
+			nounlock = true,
+			min_spacing = 1,
+			placer = name .. "_placer",
+			build_mode = "insidedoor",
+		}, { "INTERIOR" })
+end
+
+AddInteriorExpansionDoorRecipe("wood_door", 10)
+AddInteriorExpansionDoorRecipe("iron_door", 15)
+AddInteriorExpansionDoorRecipe("curtain_door", 15)
+AddInteriorExpansionDoorRecipe("pillar_door", 20)
 
 
 AddRecipe2("interior_floor_wood", { Ingredient("oinc", 5) }, TECH.HOME_ONE, { nounlock = true },
@@ -1187,33 +1240,34 @@ end
 
 -- AddWallSectionRecipe("window_round", 3) ----------------这俩没制作栏贴图
 -- AddWallSectionRecipe("window_round_curtains_nails", 4)
-AddWallSectionRecipe("window_round_burlap", 4)
+local WALL_SECTION_RECIPES = {
+	{ "window_round_burlap", 4 },
+	{ "window_small_peaked", 3 },
+	{ "window_small_peaked_curtain", 4 },
+	{ "window_large_square", 4 },
+	{ "window_large_square_curtain", 5 },
+	{ "window_tall", 4 },
+	{ "window_tall_curtain", 5 },
+	{ "window_greenhouse", 8 },
+	{ "wallornament_axe", 5 },
+	{ "wallornament_photo", 2 },
+	{ "wallornament_embroidery_hoop", 3 },
+	{ "wallornament_mosaic", 4 },
+	{ "wallornament_wreath", 4 },
+	{ "wallornament_hunt", 5 },
+	{ "wallornament_periodic_table", 5 },
+	{ "wallornament_gears_art", 8 },
+	{ "wallornament_cape", 5 },
+	{ "wallornament_no_smoking", 3 },
+	{ "wallornament_black_cat", 5 },
+	{ "antiquities_wallfish", 5 },
+	{ "antiquities_beefalo", 10 },
+	{ "wallornament_fulllength_mirror", 10 },
+}
 
-AddWallSectionRecipe("window_small_peaked", 3)
-AddWallSectionRecipe("window_small_peaked_curtain", 4)
-
-AddWallSectionRecipe("window_large_square", 4)
-AddWallSectionRecipe("window_large_square_curtain", 5)
-
-AddWallSectionRecipe("window_tall", 4)
-AddWallSectionRecipe("window_tall_curtain", 5)
-
-AddWallSectionRecipe("window_greenhouse", 8)
-
-AddWallSectionRecipe("wallornament_axe", 5)
-AddWallSectionRecipe("wallornament_photo", 2)
-AddWallSectionRecipe("wallornament_embroidery_hoop", 3)
-AddWallSectionRecipe("wallornament_mosaic", 4)
-AddWallSectionRecipe("wallornament_wreath", 4)
-AddWallSectionRecipe("wallornament_hunt", 5)
-AddWallSectionRecipe("wallornament_periodic_table", 5)
-AddWallSectionRecipe("wallornament_gears_art", 8)
-AddWallSectionRecipe("wallornament_cape", 5)
-AddWallSectionRecipe("wallornament_no_smoking", 3)
-AddWallSectionRecipe("wallornament_black_cat", 5)
-AddWallSectionRecipe("antiquities_wallfish", 5)
-AddWallSectionRecipe("antiquities_beefalo", 10)
-AddWallSectionRecipe("wallornament_fulllength_mirror", 10)
+for _, recipe in ipairs(WALL_SECTION_RECIPES) do
+	AddWallSectionRecipe(recipe[1], recipe[2])
+end
 -- AddRecipe2("reno_antiquities_beefalo", { Ingredient("oinc", 10) }, TECH.HOME_ONE, {
 
 -- AddWallSectionRecipe("wallornament_chalkboard") -----这些没有制作栏贴图
@@ -1238,7 +1292,7 @@ local function AddLightRecipe(name, oincvalue)
 		{
 
 			nounlock = true,
-			-- build_mode = data and data.buildmode or "wallsection",
+			build_mode = "interior",
 			min_spacing = 0,
 			placer = prefabname .. "_placer",
 			image = "reno_" .. name .. ".tex"
@@ -1246,17 +1300,23 @@ local function AddLightRecipe(name, oincvalue)
 		{ "INTERIOR" })
 end
 
-AddLightRecipe("light_basic_bulb", 4)
-AddLightRecipe("light_basic_metal", 4)
-AddLightRecipe("light_chandalier_candles", 5)
-AddLightRecipe("light_rope_1", 5)
-AddLightRecipe("light_rope_2", 5)
-AddLightRecipe("light_floral_bulb", 8)
-AddLightRecipe("light_pendant_cherries", 5)
-AddLightRecipe("light_floral_scallop", 3)
-AddLightRecipe("light_floral_bloomer", 5)
-AddLightRecipe("light_tophat", 2)
-AddLightRecipe("light_derby", 10)
+local CEILING_LIGHT_RECIPES = {
+	{ "light_basic_bulb", 4 },
+	{ "light_basic_metal", 4 },
+	{ "light_chandalier_candles", 5 },
+	{ "light_rope_1", 5 },
+	{ "light_rope_2", 5 },
+	{ "light_floral_bulb", 8 },
+	{ "light_pendant_cherries", 5 },
+	{ "light_floral_scallop", 3 },
+	{ "light_floral_bloomer", 5 },
+	{ "light_tophat", 2 },
+	{ "light_derby", 10 },
+}
+
+for _, recipe in ipairs(CEILING_LIGHT_RECIPES) do
+	AddLightRecipe(recipe[1], recipe[2])
+end
 
 
 
@@ -1290,28 +1350,31 @@ local function AddShelfRecipe(name, oincvalue)
 		{ "INTERIOR" })
 end
 
-AddShelfRecipe("shelves_wood", 2)
-AddShelfRecipe("shelves_basic")
-AddShelfRecipe("shelves_floating")
-AddShelfRecipe("shelves_wood")
-AddShelfRecipe("shelves_basic")
-AddShelfRecipe("shelves_marble")
-AddShelfRecipe("shelves_glass")
-AddShelfRecipe("shelves_ladder")
-AddShelfRecipe("shelves_hutch")
-AddShelfRecipe("shelves_industrial")
-AddShelfRecipe("shelves_adjustable")
-AddShelfRecipe("shelves_fridge")
-AddShelfRecipe("shelves_cinderblocks")
-AddShelfRecipe("shelves_midcentury")
-AddShelfRecipe("shelves_wallmount")
-AddShelfRecipe("shelves_aframe")
-AddShelfRecipe("shelves_crates")
+local SHELF_RECIPES = {
+	{ "shelves_wood", 2 },
+	{ "shelves_basic", 2 },
+	{ "shelves_floating", 5 },
+	{ "shelves_marble", 5 },
+	{ "shelves_glass", 5 },
+	{ "shelves_ladder", 5 },
+	{ "shelves_hutch", 5 },
+	{ "shelves_industrial", 5 },
+	{ "shelves_adjustable", 5 },
+	{ "shelves_fridge", 5 },
+	{ "shelves_cinderblocks", 5 },
+	{ "shelves_midcentury", 5 },
+	{ "shelves_wallmount", 5 },
+	{ "shelves_aframe", 5 },
+	{ "shelves_crates", 5 },
+	{ "shelves_pipe", 5 },
+	{ "shelves_hattree", 5 },
+	{ "shelves_pallet", 5 },
+}
+
+for _, recipe in ipairs(SHELF_RECIPES) do
+	AddShelfRecipe(recipe[1], recipe[2])
+end
 -- AddShelfRecipe("shelves_hooks")
-AddShelfRecipe("shelves_pipe")
-AddShelfRecipe("shelves_hattree")
-AddShelfRecipe("shelves_pallet")
-AddShelfRecipe("shelves_floating")
 -- AddShelfRecipe("shelves_displaycase")
 -- AddShelfRecipe("shelves_displaycase_metal")
 
@@ -1722,6 +1785,50 @@ AddRecipe2("deco_chair_rocking", { Ingredient("oinc", 2) }, TECH.HOME_ONE,
 		"reno_chair_rocking.tex"
 	}, { "INTERIOR" })
 
+local INTERIOR_DECOR_RECIPES = {
+	{
+		prefab = "deco_chaise",
+		ingredients = { Ingredient("oinc", 2) },
+		placer = "deco_chaise_placer",
+		image = "reno_chair_chaise.tex",
+	},
+	{
+		prefab = "deco_chair_ottoman",
+		ingredients = { Ingredient("oinc", 2) },
+		placer = "chair_ottoman_placer",
+		image = "reno_chair_ottoman.tex",
+	},
+	{
+		prefab = "deco_plantholder_marble",
+		ingredients = { Ingredient("oinc", 6) },
+		placer = "deco_plantholder_marble_placer",
+		image = "reno_plantholder_marble.tex",
+	},
+	{
+		prefab = "deco_plantholder_winterfeasttreeofsadness",
+		ingredients = { Ingredient("oinc", 2), Ingredient("twigs", 1) },
+		placer = "deco_plantholder_winterfeasttreeofsadness_placer",
+		image = "reno_plantholder_winterfeasttreeofsadness.tex",
+	},
+	{
+		prefab = "deco_plantholder_winterfeasttree",
+		ingredients = { Ingredient("oinc", 50) },
+		placer = "deco_plantholder_winterfeasttree_placer",
+		image = "reno_lamp_festivetree.tex",
+	},
+}
+
+for _, recipe in ipairs(INTERIOR_DECOR_RECIPES) do
+	AddRecipe2(recipe.prefab, recipe.ingredients, TECH.HOME_ONE,
+		{
+			nounlock = false,
+			min_spacing = 1,
+			placer = recipe.placer,
+			image = recipe.image,
+		},
+		{ "INTERIOR" })
+end
+
 
 
 AddRecipe2("rug_round", { Ingredient("oinc", 2) }, TECH.HOME_ONE,
@@ -1811,6 +1918,11 @@ AddRecipe2("rug_tiles", { Ingredient("oinc", 5) }, TECH.HOME_ONE,
 GLOBAL.CONSTRUCTION_PLANS["collapsed_honeychest"] = { Ingredient("chitin", 3), Ingredient("beeswax", 1), Ingredient(
 	"honey", 2), Ingredient("alterguardianhatshard", 1) }
 GLOBAL.CONSTRUCTION_PLANS["pugaliskfountain_made"] = { Ingredient("ice", 10), Ingredient("waterdrop", 1) }
+GLOBAL.CONSTRUCTION_PLANS["seaworthy_broken"] = { Ingredient("transistor", 4), Ingredient("gears", 4) }
+GLOBAL.CONSTRUCTION_PLANS["seaworthy"] = GLOBAL.CONSTRUCTION_PLANS["seaworthy_broken"]
+GLOBAL.CONSTRUCTION_PLANS["ligamundosw"] = GLOBAL.CONSTRUCTION_PLANS["seaworthy_broken"]
+GLOBAL.CONSTRUCTION_PLANS["skyworthy_broken"] = { Ingredient("transistor", 4), Ingredient("gears", 4) }
+GLOBAL.CONSTRUCTION_PLANS["skyworthy"] = GLOBAL.CONSTRUCTION_PLANS["skyworthy_broken"]
 
 AddRecipe2("bed0", { Ingredient("oinc", 5) }, TECH.HOME_ONE,
 	{ nounlock = false, min_spacing = 1, placer = "bed0_placer" },

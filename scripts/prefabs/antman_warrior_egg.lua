@@ -1,3 +1,5 @@
+local AntEcology = require("tools/antecology")
+local prefabs = { "antman_warrior" }
 local assets =
 {
 	Asset("ANIM", "anim/antman_basic.zip"),
@@ -26,8 +28,18 @@ local function dohatch(inst, hatch_time)
 						if inst.queen then
 							warrior.queen = inst.queen
 						end
-						local invader = GetClosestInstWithTag("player", inst, 30)
-						if invader then warrior.components.combat:SetTarget(invader) end
+						local invader = inst.queen and inst.queen.components.combat.target
+						if invader == nil then
+							invader = FindEntity(inst, 30, function(player)
+								return AntEcology.IsIntruder(warrior, player, 30)
+								end, { "player" })
+						end
+						if invader and warrior.components.combat:CanTarget(invader) then
+							if inst.queen and inst.queen.components.combat.target == invader then
+								warrior._ant_attacker = invader
+								end
+							warrior.components.combat:SetTarget(invader)
+						end
 
 						--local queen = GetClosestInstWithTag("antqueen", inst, 30)
 						--						if queen and warrior.queen then						
@@ -118,7 +130,7 @@ local function fn()
 
 
 	inst:ListenForEvent("animover", function(inst)
-		if inst.AnimState:IsCurrentAnimation("hatch") then
+		if inst.AnimState:IsCurrentAnimation("hatch") or inst.AnimState:IsCurrentAnimation("break") then
 			inst:Remove()
 		end
 	end)

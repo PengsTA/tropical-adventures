@@ -7,10 +7,20 @@ local function onfinished(inst)
 	inst:Remove()
 end
 
+local function GetInteriorSurface(inst)
+	return GetClosestInstWithTag("ta_interior_surface", inst, 25)
+end
+
 local function paintwall(inst)
+	local surface = GetInteriorSurface(inst)
+	if surface ~= nil and surface.SetWallMaterial ~= nil and surface:SetWallMaterial(inst.textura) then
+		inst:Remove()
+		return
+	end
+
 	local wall = GetClosestInstWithTag("wallhousehamlet", inst, 25)
 
-	if wall then
+	if wall ~= nil and wall.AnimState ~= nil then
 		wall.AnimState:SetBank("wallhamletcity1")
 		wall.AnimState:SetBuild("wallhamletcity1")
 		wall.AnimState:PlayAnimation(inst.textura, true)
@@ -21,9 +31,15 @@ local function paintwall(inst)
 end
 
 local function paintwall2(inst)
+	local surface = GetInteriorSurface(inst)
+	if surface ~= nil and surface.SetWallMaterial ~= nil and surface:SetWallMaterial(inst.textura) then
+		inst:Remove()
+		return
+	end
+
 	local wall = GetClosestInstWithTag("wallhousehamlet", inst, 25)
 
-	if wall then
+	if wall ~= nil and wall.AnimState ~= nil then
 		wall.AnimState:SetBank("wallhamletcity2")
 		wall.AnimState:SetBuild("wallhamletcity2")
 		wall.AnimState:PlayAnimation(inst.textura, true)
@@ -34,9 +50,15 @@ local function paintwall2(inst)
 end
 
 local function paintfloor(inst)
+	local surface = GetInteriorSurface(inst)
+	if surface ~= nil and surface.SetFloorMaterial ~= nil and surface:SetFloorMaterial(inst.textura) then
+		inst:Remove()
+		return
+	end
+
 	local piso = GetClosestInstWithTag("pisohousehamlet", inst, 25)
 
-	if piso then
+	if piso ~= nil and piso.AnimState ~= nil then
 		piso.AnimState:PlayAnimation(inst.textura, true)
 		piso.floorpaper = inst.textura
 	end
@@ -75,10 +97,12 @@ local function paintwindow(inst)
 
 	if janela then
 		local x, y, z = janela.Transform:GetWorldPosition()
+		local rotation = janela.Transform:GetRotation()
 		local troca = SpawnPrefab(inst.textura)
 		if troca then
 			troca.Transform:SetPosition(x, y, z)
-			troca.Transform:SetRotation(90)
+			troca.Transform:SetRotation(rotation)
+			troca.height = janela.height
 			janela:Remove()
 		end
 	end
@@ -91,9 +115,12 @@ local function paintluz(inst)
 
 	if luz then
 		local x, y, z = luz.Transform:GetWorldPosition()
+		local rotation = luz.Transform:GetRotation()
 		local troca = SpawnPrefab(inst.textura)
 		if troca then
 			troca.Transform:SetPosition(x, y, z)
+			troca.Transform:SetRotation(rotation)
+			troca.height = luz.height
 			luz:Remove()
 		end
 	end
@@ -1146,7 +1173,7 @@ local function fn17(Sim)
 	inst.AnimState:PlayAnimation("shop_floor_woodmetal")
 
 	inst:AddTag("hameletfloor")
-	inst:AddTag("shop_floor_woodmetal")
+	inst:AddTag("floor_transitional")
 
 	inst.entity:SetPristine()
 
@@ -1168,7 +1195,7 @@ local function fn17(Sim)
 
 
 
-	inst.textura = "shop_floor_woodmetal"
+	inst.textura = "floor_transitional"
 	inst.OnBuilt = function(inst, builder) paintfloor(inst) end
 	return inst
 end
@@ -1230,7 +1257,7 @@ local function fn19(Sim)
 	inst.AnimState:PlayAnimation("shop_floor_woodpaneling2")
 
 	inst:AddTag("hameletfloor")
-	inst:AddTag("shop_floor_woodpaneling2")
+	inst:AddTag("floor_woodpanels")
 
 	inst.entity:SetPristine()
 
@@ -1252,7 +1279,7 @@ local function fn19(Sim)
 
 
 
-	inst.textura = "shop_floor_woodpaneling2"
+	inst.textura = "floor_woodpanels"
 	inst.OnBuilt = function(inst, builder) paintfloor(inst) end
 	return inst
 end

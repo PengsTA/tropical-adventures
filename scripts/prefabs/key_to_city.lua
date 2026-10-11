@@ -15,10 +15,6 @@ local function OnTurnOff(inst)
     end)
 end
 
-local function canCurrentlyPrototypeTestFn(inst)
-    return not TheCamera.interior
-end
-
 local function storeincontainer(inst, container)
     if container ~= nil and container.components.container ~= nil then
         inst:ListenForEvent("onputininventory", inst._oncontainerownerchanged, container)
@@ -60,8 +56,10 @@ local function toground(inst)
 end
 
 local function OnRemoveEntity(inst)
+    unstore(inst)
     if inst.icon ~= nil then
         inst.icon:Remove()
+        inst.icon = nil
     end
 end
 
@@ -78,7 +76,7 @@ local function fn(Sim)
     inst.AnimState:SetBank("keytocity")
     inst.AnimState:SetBuild("key_to_city")
     inst:AddTag("prototyper")
-    inst:AddTag("no_interior_protoyping")
+    inst:AddTag("exterior_prototyper")
     inst:AddTag("irreplaceable")
 
     inst.AnimState:PlayAnimation("idle")
@@ -106,6 +104,7 @@ local function fn(Sim)
 
     inst.icon = SpawnPrefab("key_to_city_icon")
     inst.icon.entity:SetParent(inst.entity)
+    inst.OnRemoveEntity = OnRemoveEntity
     inst:ListenForEvent("onputininventory", topocket)
     inst:ListenForEvent("ondropped", toground)
 
@@ -147,7 +146,7 @@ local function iconfn()
 
     inst.icon = nil
     inst:DoTaskInTime(0, icon_init)
-    inst.OnRemoveEntity = inst.OnRemoveEntity
+    inst.OnRemoveEntity = OnRemoveEntity
     inst.persists = false
 
     return inst

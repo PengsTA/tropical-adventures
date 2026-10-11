@@ -62,7 +62,7 @@ local function Horror(Target)
     SpawnPrefab("shadowmeteor").Transform:SetPosition(Target:GetPosition():Get())
 end
 
-function convert_rocks(inst, replacement)
+local function convert_rocks(inst, replacement)
     if inst:IsValid() and replacement ~= nil then
         local goop = SpawnPrefab(replacement)
         if goop ~= nil then
@@ -84,8 +84,8 @@ function convert_rocks(inst, replacement)
     end
 end
 
-function UseStaff(inst, Target, pos)
-    --print("using staff")
+local function UseStaff(inst, Target, pos)
+    local caster = inst.components.inventoryitem.owner
     if inst.prefab == "pigking" then
         Target = inst
     end
@@ -105,29 +105,26 @@ function UseStaff(inst, Target, pos)
     if Target then
         local hitfn = GetRandomItem({ LightningStrike, MeteorStrike, Ignite })
         hitfn(Target)
-        inst.components.finiteuses:Use(1)
-
-        local owner = inst.components.inventoryitem ~= nil and inst.components.inventoryitem.owner or nil
-        if owner then
-            Target:PushEvent("attacked", { attacker = owner, damage = 0, weapon = inst })
+        if caster ~= nil and Target:IsValid() then
+            Target:PushEvent("attacked", { attacker = caster, damage = 0, weapon = inst })
         end
+        inst.components.finiteuses:Use(1)
     end
 
     if Target == nil then
         local prefab = GetRandomItem({ "wildbore" }) --, "acorn_sapling", "acorn_sapling","acorn_sapling","birchnutdrake", "acorn"})
         local nut = SpawnPrefab(prefab)
+        if nut == nil then return false end
         local cloud = SpawnPrefab("poopcloud")
         nut.Transform:SetPosition(pos:Get())
-        cloud.Transform:SetPosition(pos:Get())
-        inst.components.finiteuses:Use(1)
-
-        local caster = inst.components.inventoryitem.owner
-
-
-        if nut.components.follower:GetLeader() == nil then
-            local comida = SpawnPrefab("Meat")
-            nut.components.trader:AcceptGift(caster, comida)
+        if cloud ~= nil then cloud.Transform:SetPosition(pos:Get()) end
+        if caster ~= nil and nut.components.follower:GetLeader() == nil then
+            local food = SpawnPrefab("meat")
+            if food ~= nil and not nut.components.trader:AcceptGift(caster, food) then
+                food:Remove()
+            end
         end
+        inst.components.finiteuses:Use(1)
     end
 
     return true

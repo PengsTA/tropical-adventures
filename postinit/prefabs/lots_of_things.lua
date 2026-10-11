@@ -130,6 +130,7 @@ end
 for _, prefab in pairs({ "sewing_tape" }) do
     AddPrefabPostInit(prefab, function(inst)
         inst:AddTag("boatrepairkit")
+        inst:AddTag("interactions")
         if not TheWorld.ismastersim then
             return
         end
@@ -190,47 +191,3 @@ AddPrefabPostInit("deco_palace_throne", function(inst)
     end
 end
 )
-
-local roomsize = TUNING.HAMROOM.roomsize
-local roomtype = TUNING.HAMROOM.roomtype
--- 室内可放置建筑，物品不会掉入“水”中
-
-local function CheckNearRoomCenter(x, z, rsize)
-    if x < (-rsize.back + 0) and x > (-rsize.back - 1) and math.abs(z) <= (rsize.side + 2) then ---11
-        return "back"
-    elseif x < (rsize.front + 1) and x > (rsize.front + 0) and math.abs(z) <= (rsize.side + 2) then
-        return "front"
-    elseif z > (rsize.side + 0) and z < (rsize.side + 1) and x <= (rsize.front + 1) and x >= (-rsize.back - 1) then
-        return "right"
-    elseif -z > (rsize.side + 0) and -z < (rsize.side + 1) and x <= (rsize.front + 1) and x >= (-rsize.back - 1) then
-        return "left"
-    end
-
-    return false
-end
-
-AddPrefabPostInitAny(function(inst)
-    if inst:HasTag("interior_center") then
-        inst:DoTaskInTime(2, function(inst)
-            local x, y, z = inst.Transform:GetWorldPosition()
-            x, z = math.floor(x) + 0.5, math.floor(z) + 0.5
-            local rsize = roomsize[roomtype[inst.prefab] or "small"]
-            local ents = TheSim:FindEntities(x, y, z, 20, { "wall_room" })
-            if #ents <= 0 then
-                -- print("interior_center does not have wall")
-                local tipodemuro = "wall_invisible"
-                for xx = -40, 40 do
-                    for zz = -40, 40 do
-                        if CheckNearRoomCenter(xx / 2, zz / 2, rsize) then
-                            -- print("interior_center3")
-                            local part = SpawnPrefab(tipodemuro)
-                            part.Transform:SetPosition(x + xx / 2, 0, z + zz / 2)
-                        end
-                    end
-                end
-            else
-                -- print("interior_center does have wall")
-            end
-        end)
-    end
-end)

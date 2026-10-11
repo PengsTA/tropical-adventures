@@ -856,7 +856,7 @@ return
     Prefab("deco_ruins_corner_tree",
         decofn("interior_wall_decals_ruins", "interior_wall_decals_ruins", "giant_roots",
             { decal = true, background = 3, physics = "tree_physics" }), assets, prefabs), -- , minimapicon="pig_ruins_tree_roots_int.tex"
-    Prefab("deco_ruins_beam_heavy",
+    Prefab("deco_ruins_beam",
         decofn("interior_wall_decals_ruins", "interior_wall_decals_ruins", "pillar_side_lg",
             { decal = true, background = 3 }),
         assets, prefabs),
@@ -911,7 +911,7 @@ return
     Prefab("deco_ruins_cornerbeam_heavy_blue",
         decofn("interior_wall_decals_ruins_blue", "interior_wall_decals_ruins", "pillar_corner_lg",
             { decal = true, background = 3, tags = { "cornerpost" } }), assets, prefabs),
-    Prefab("deco_ruins_beam_heavy_blue",
+    Prefab("deco_ruins_beam_blue",
         decofn("interior_wall_decals_ruins_blue", "interior_wall_decals_ruins", "pillar_side_lg",
             { decal = true, background = 3 }), assets, prefabs),
     Prefab("deco_ruins_beam_blue",

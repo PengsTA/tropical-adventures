@@ -98,10 +98,7 @@ local function OnAttackOther(inst, data)
 end
 
 local function DoReturn(inst)
-	--print("DoReturn", inst)
-	if inst.components.homeseeker then
-		inst.components.homeseeker:ForceGoHome()
-	end
+	require("tools/home_return").ReturnOffscreen(inst)
 end
 
 local function OnDay(inst)

@@ -3,6 +3,8 @@ require "behaviours/doaction"
 require "behaviours/chaseandattack"
 require "behaviours/standstill"
 
+local LilypadPopulation = require("tools/lilypad_population")
+
 local STOP_RUN_DIST = 10
 local SEE_PLAYER_DIST = 5
 local MAX_WANDER_DIST = 20
@@ -33,6 +35,10 @@ end
 
 
 local function ShouldGoHome(inst)
+    local lilypadhome = LilypadPopulation.ShouldGoHome(inst)
+    if lilypadhome ~= nil then
+        return lilypadhome
+    end
     return  (not TheWorld.state.isday and not inst:HasTag("duskok")) or (TheWorld.state.isnight and inst:HasTag("duskok")) or TheWorld.state.iswinter
 end
 

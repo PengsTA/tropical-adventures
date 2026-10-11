@@ -59,17 +59,6 @@ local function emit_fn(emitter, radius)
 	--print("emit.... complete")
 end
 
-local function OnTimerDone(inst, data)
-	if data.name == "vaiembora" then
-		local invader = GetClosestInstWithTag("player", inst, 25)
-		if not invader then
-			inst:Remove()
-		else
-			inst.components.timer:StartTimer("vaiembora", 10)
-		end
-	end
-end
-
 local function volcanofn(Sim)
 	local inst = CreateEntity()
 	local trans = inst.entity:AddTransform()
@@ -114,62 +103,6 @@ local function volcanofn(Sim)
 
 	return inst
 end
-
-local function oceanfn(Sim)
-	local inst = CreateEntity()
-	local trans = inst.entity:AddTransform()
-	inst.entity:AddNetwork()
-
-	inst:AddTag("FX")
-	inst:AddTag("NOCLICK")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
-	end
-
-	InitEnvelopes()
-
-	local emitter = inst.entity:AddParticleEmitter()
-	emitter:SetRenderResources(texture, shader)
-	emitter:SetMaxNumParticles(max_num_particles)
-	emitter:SetMaxLifetime(max_lifetime)
-	emitter:SetSpawnVectors(-1, 0, 1, 1, 0, 1) --( config.SV[1].x, config.SV[1].y, config.SV[1].z, config.SV[2].x, config.SV[2].y, config.SV[2].z)
-	emitter:SetSortOrder(3)
-	emitter:SetScaleEnvelope(scale_envelope_name);
-	emitter:SetRadius(emitter_radius)
-
-	inst.num_particles_to_emit = 0
-	inst.ParticleEmitter:SetColourEnvelope("volcanofogcolourenvelope")
-	inst.particles_per_tick = 1 * TheSim:GetTickTime()
-
-	local function updateFunc()
-		--print("emit updateFunc....", inst.num_particles_to_emit)
-		while inst.num_particles_to_emit > 1 do
-			emit_fn(inst.ParticleEmitter, emitter_radius)
-			inst.num_particles_to_emit = inst.num_particles_to_emit - 1
-		end
-
-		inst.num_particles_to_emit = inst.num_particles_to_emit + inst.particles_per_tick
-		--print("emit updateFunc.... complete")
-	end
-
-	EmitterManager:AddEmitter(inst, nil, updateFunc)
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
-	end
-
-	inst:AddComponent("timer")
-	inst:ListenForEvent("timerdone", OnTimerDone)
-	inst.components.timer:StartTimer("vaiembora", 80 + math.random() * 80)
-
-	return inst
-end
-
 
 local function volcanowall(Sim)
 	local inst = CreateEntity()
@@ -223,5 +156,4 @@ end
 
 return
 	Prefab("common/fx/volcanofog", volcanofn, assets),
-	Prefab("common/fx/oceanfog", oceanfn, assets),
 	Prefab("common/fx/wallfog", volcanowall, assets)

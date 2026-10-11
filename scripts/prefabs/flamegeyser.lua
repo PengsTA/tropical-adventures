@@ -38,8 +38,10 @@ end
 
 local function SetIgniteTimer(inst)
     inst:DoTaskInTime(GetRandomWithVariance(FLAMEGEYSER_REIGNITE_TIME, FLAMEGEYSER_REIGNITE_TIME_VARIANCE), function()
-        inst.components.fueled:SetPercent(1.0)
-        OnIgnite(inst)
+        if inst.components.floodable == nil or not inst.components.floodable.flooded then
+            inst.components.fueled:SetPercent(1.0)
+            OnIgnite(inst)
+        end
     end)
 end
 
@@ -72,6 +74,15 @@ end
 local function OnIdle(inst)
     inst.AnimState:PlayAnimation("idle_dormant", true)
     inst.Light:Enable(false)
+end
+
+local function OnFloodedStart(inst)
+    inst.components.fueled:SetPercent(0)
+    OnExtinguish(inst, false)
+end
+
+local function OnFloodedEnd(inst)
+    SetIgniteTimer(inst)
 end
 
 local function OnLoad(inst, data)
@@ -165,6 +176,10 @@ local function fn(Sim)
     inst.components.fueled:SetSections(4)
     inst.components.fueled.rate = 1
     inst.components.fueled.period = 1
+
+    inst:AddComponent("floodable")
+    inst.components.floodable.onStartFlooded = OnFloodedStart
+    inst.components.floodable.onStopFlooded = OnFloodedEnd
 
 
     inst.components.fueled:SetSectionCallback(function(section)

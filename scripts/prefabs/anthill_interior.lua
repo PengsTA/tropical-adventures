@@ -19,22 +19,14 @@ end
 local function createroom(inst)
 	--------------------------------------------------inicio da criacao---------------------------------------
 
-	local x = 0
-	local y = 0
-	local z = 0
-	if TheWorld.components.contador then TheWorld.components.contador:Increment(1) end
-	local numerounico = TheWorld.components.contador.count
-
-	x = TheWorld.components.contador:GetX()
-	y = 0
-	z = TheWorld.components.contador:GetZ()
+	local room = TheWorld.components.interior_manager:Allocate(nil, "anthill")
+	local x, y, z = room.x, 0, room.z
 
 	---------------------------cria a parede inicio------------------------------------------------------------------	
 	local tipodemuro = "wall_invisible"
 	---------------------------cria a parede inicio -------------------------------------
 	---------------------------parade dos aposento------------------------------------------------------------------	
 
-	x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
 	inst.Transform:SetPosition(x, 0, z)
 
 	local POS = {}

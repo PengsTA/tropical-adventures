@@ -1,3 +1,4 @@
+local EaterFilters = require("tools/eater_filters")
 local assets_baby =
 {
 
@@ -241,29 +242,13 @@ local function OnMate(inst, partner)
 end
 
 
-function OnDead(inst)
-	local x, y, z = inst.Transform:GetLocalPosition()
-
+local function OnDead(inst)
 	if seabeach_amount.doydoy < 3 then
-		local tamanhodomapa = (TheWorld.Map:GetSize()) * 2 - 2
-		local map = TheWorld.Map
-		local x
-		local z
-		local numerodeitens = 1
-
-		repeat
-			x = math.random(-tamanhodomapa, tamanhodomapa)
-			z = math.random(-tamanhodomapa, tamanhodomapa)
-			local curr = map:GetTile(map:GetTileCoordsAtPoint(x, 0, z))
-			-------------------coloca os itens------------------------
-			if (curr ~= GROUND.OCEAN_COASTAL and curr ~= GROUND.OCEAN_WATERLOG and curr ~= GROUND.OCEAN_COASTAL_SHORE and curr ~= GROUND.OCEAN_SWELL and curr ~= GROUND.OCEAN_ROUGH and curr ~= GROUND.OCEAN_BRINEPOOL and curr ~= GROUND.OCEAN_BRINEPOOL_SHORE and curr ~= GROUND.OCEAN_HAZARDOUS) then
-				local colocaitem = SpawnPrefab("doydoy_spawner")
-				colocaitem.Transform:SetPosition(x, 0, z)
-				numerodeitens = numerodeitens - 1
-			end
-			-----------------------------------------------------------
-		until
-			numerodeitens <= 0
+		local x, z = require("tools/land_search").Find(TheWorld.Map, 2, inst:GetPosition())
+		if x ~= nil then
+			local spawner = SpawnPrefab("doydoy_spawner")
+			spawner.Transform:SetPosition(x, 0, z)
+		end
 	end
 end
 
@@ -318,7 +303,7 @@ local function commonfn(Sim)
 	inst:AddComponent("entitytracker")
 
 	inst:AddComponent("eater")
-	inst.components.eater:SetOnEatFn(CanEatFn)
+	EaterFilters.Restrict(inst.components.eater, CanEatFn)
 
 	inst:ListenForEvent("entitysleep", OnEntitySleep)
 	inst:ListenForEvent("entitywake", OnEntityWake)
@@ -408,14 +393,17 @@ local function onpreload(inst, data)
 		if data.day_to_spawn then
 			inst.day_to_spawn = data.day_to_spawn
 		end
-		if data.hastag_mating then
-			inst:AddTag("mating")
+		if data.hastag_mating ~= nil then
+			if data.hastag_mating then inst:AddTag("mating") else inst:RemoveTag("mating") end
 		end
-		if data.hastag_daddy then
-			inst:AddTag("daddy")
-		end
-		if data.hastag_mommy then
-			inst:AddTag("mommy")
+		if data.hastag_daddy ~= nil or data.hastag_mommy ~= nil then
+			inst:RemoveTag("daddy")
+			inst:RemoveTag("mommy")
+			if data.hastag_mommy then
+				inst:AddTag("mommy")
+			elseif data.hastag_daddy then
+				inst:AddTag("daddy")
+			end
 		end
 	end
 end

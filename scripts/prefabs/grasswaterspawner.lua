@@ -1,3 +1,4 @@
+local WaterSpawners = require("tools/water_spawners")
 local assets =
 {
 
@@ -8,7 +9,7 @@ local prefabs =
     "grasswater",
 }
 
-local VALID_TILES = table.invert(
+local EXCLUDED_TILES = table.invert(
     {
         GROUND.MARSH,
     })
@@ -71,9 +72,8 @@ local function GetSpawnPoint(pt)
     local function TestSpawnPoint(offset)
         local spawnpoint = pt + offset
         local spawnpoint_x, spawnpoint_y, spawnpoint_z = (pt + offset):Get()
-        return not TheWorld.Map:IsAboveGroundAtPoint(spawnpoint:Get())
-            and not VALID_TILES[TheWorld.Map:GetTileAtPoint(spawnpoint:Get())] ~= nil and
-            not TheWorld.Map:IsPassableAtPoint(spawnpoint:Get()) and IsNotNextToLand(spawnpoint)
+        return WaterSpawners.IsWaterPoint(TheWorld.Map, spawnpoint, EXCLUDED_TILES)
+            and IsNotNextToLand(spawnpoint)
     end
 
     local theta = math.random() * 2 * PI
@@ -92,11 +92,7 @@ local function SpawnGrassWaterPre(inst)
         local plant = SpawnGrassWater(spawn_point)
         inst:Remove()
     else
-        inst.tentativas = inst.tentativas - 1
-        if inst.tentativas and inst.tentativas > 1 then
-            inst:DoTaskInTime(1, SpawnGrassWaterPre)
-        end
-        if inst.tentativas and inst.tentativas < 1 then inst:Remove() end
+        WaterSpawners.Retry(inst, SpawnGrassWaterPre)
     end
 end
 
@@ -117,7 +113,7 @@ local function fn()
         return inst
     end
     --inst:AddTag("CLASSIFIED")
-    inst.tentativas = 10
+    inst.spawn_attempts = 10
 
     inst:DoTaskInTime(1, SpawnGrassWaterPre)
 

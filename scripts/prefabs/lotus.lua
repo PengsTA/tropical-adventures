@@ -117,7 +117,8 @@ local function fn(Sim)
     local minimap = inst.entity:AddMiniMapEntity()
     inst.entity:AddNetwork()
 
-    MakeObstaclePhysics(inst, .25)
+    MakeInventoryPhysics(inst, nil, 0.7)
+    inst:AddTag("ignorewalkableplatforms")
 
     anim:SetBank("lotus")
     anim:SetBuild("lotus")
@@ -126,7 +127,6 @@ local function fn(Sim)
     local color = 0.75 + math.random() * 0.25
     anim:SetMultColour(color, color, color, 1)
 
-    local minimap = inst.entity:AddMiniMapEntity()
     minimap:SetIcon("lotus.tex")
 
     inst.entity:SetPristine()

@@ -86,6 +86,28 @@ return {
       objects = {
         {
           name = "",
+          type = "antcombhomecavenursery",
+          shape = "rectangle",
+          x = 160,
+          y = 320,
+          width = 0,
+          height = 0,
+          visible = true,
+          properties = {}
+        },
+        {
+          name = "",
+          type = "antcombhomecavenursery",
+          shape = "rectangle",
+          x = 320,
+          y = 160,
+          width = 0,
+          height = 0,
+          visible = true,
+          properties = {}
+        },
+        {
+          name = "",
           type = "antqueen",
           shape = "rectangle",
           x = 320,

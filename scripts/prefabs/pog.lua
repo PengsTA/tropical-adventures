@@ -1,17 +1,13 @@
-require("brains/pogbrain")
-require "stategraphs/SGcatcoon"
-
 local assets =
 {
 	Asset("ANIM", "anim/pog_basic.zip"),
 	Asset("ANIM", "anim/pog_actions.zip"),
 	Asset("ANIM", "anim/pog_feral_build.zip"),
-	--Asset("SOUND", "sound/catcoon.fsb"),
 }
 
 local prefabs =
 {
-
+	"pog_spawner",
 }
 
 local POG_ATTACK_RANGE = 3
@@ -145,6 +141,33 @@ local function OnRefuseItem(inst, giver, item)
 	end
 end
 
+local function RestoreSpawnPoint(inst)
+	if inst.components.health:IsDead() then
+		return
+	end
+
+	local home = inst.components.homeseeker ~= nil and inst.components.homeseeker:GetHome() or nil
+	if home ~= nil and home:IsValid() then
+		return
+	end
+
+	-- Adopt legacy wild pogs after all saved spawner references have been linked.
+	local point = inst.components.knownlocations:GetLocation("home")
+		or inst.components.knownlocations:GetLocation("herd")
+		or inst:GetPosition()
+	local spawner = SpawnPrefab("pog_spawner")
+	if spawner ~= nil then
+		spawner.Transform:SetPosition(point:Get())
+		spawner.components.spawner:CancelSpawning()
+		spawner.components.spawner:TakeOwnership(inst)
+		spawner.components.spawner:SetOnlySpawnOffscreen(true)
+	end
+end
+
+local function OnLoadPostPass(inst)
+	inst:DoTaskInTime(0, RestoreSpawnPoint)
+end
+
 local function fn()
 	local inst = CreateEntity()
 	local trans = inst.entity:AddTransform()
@@ -156,7 +179,6 @@ local function fn()
 	inst.entity:AddNetwork()
 
 	MakeCharacterPhysics(inst, 1, 0.5)
-	--	MakePoisonableCharacter(inst)
 
 	anim:SetBank("pog")
 	anim:SetBuild("pog_actions")
@@ -237,17 +259,10 @@ local function fn()
 	inst:AddComponent("embarker")
 
 	inst:AddComponent("knownlocations")
-	inst:AddComponent("herdmember")
+	inst.OnLoadPostPass = OnLoadPostPass
 
 	MakeSmallBurnableCharacter(inst, "pog_chest", Vector3(1, 0, 1))
 	MakeSmallFreezableCharacter(inst)
-
-	--[[
-	inst.special_action = function (act)
-        inst.sg:GoToState("desk_pre")
-    end
-]]
-
 
 	inst:WatchWorldState("startaporkalypse", function() inst.AnimState:SetBuild("pog_feral_build") end, TheWorld)
 	inst:WatchWorldState("stopaporkalypse", function() inst.AnimState:SetBuild("pog_basic") end, TheWorld)

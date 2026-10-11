@@ -1,3 +1,4 @@
+local TuberHarvest = require("tools/tuber_harvest")
 local assets =
 {
     Asset("ANIM", "anim/tuber_tree_build.zip"),
@@ -13,6 +14,7 @@ local assets =
 local prefabs =
 {
     "tuber_crop",
+    "tuber_bloom_crop",
     "charcoal",
 }
 
@@ -43,6 +45,7 @@ local function chop_tree(inst, chopper, chops)
 end
 
 local function set_stump(inst)
+    TuberHarvest.Stop(inst)
     inst:RemoveComponent("workable")
     inst:RemoveComponent("burnable")
     inst:RemoveComponent("propagator")
@@ -95,6 +98,7 @@ local function chop_down_burnt_tree(inst, chopper)
 end
 
 local function OnBurnt(inst)
+    TuberHarvest.Stop(inst)
     inst:RemoveComponent("burnable")
     inst:RemoveComponent("propagator")
     inst:RemoveComponent("hauntable")
@@ -120,6 +124,7 @@ local function inspect_tree(inst)
 end
 
 local function onsave(inst, data)
+    data.tubers = inst.tubers
     if inst:HasTag("burnt") or (inst.components.burnable ~= nil and inst.components.burnable:IsBurning()) then
         data.burnt = true
     end
@@ -143,6 +148,8 @@ local function onload(inst, data)
             end
         elseif data.burnt and not inst:HasTag("burnt") then
             OnBurnt(inst)
+        else
+            TuberHarvest.Load(inst, data)
         end
     end
 end
@@ -152,13 +159,13 @@ local function OnSeasonChange(inst)
         inst.AnimState:SetBuild("tuber_bloom_build")
         inst.AnimState:SetBank("tubertree")
         if inst.components.lootdropper ~= nil then
-            inst.components.lootdropper:SetChanceLootTable('tubertree_bloom')
+            inst.components.lootdropper:SetLoot({})
         end
     else
         inst.AnimState:SetBuild("tuber_tree_build")
         inst.AnimState:SetBank("tubertree")
         if inst.components.lootdropper ~= nil then
-            inst.components.lootdropper:SetChanceLootTable('tubertree')
+            inst.components.lootdropper:SetLoot({})
         end
     end
 end
@@ -199,13 +206,14 @@ local function fn()
     MakeSmallPropagator(inst)
 
     inst:AddComponent("lootdropper")
-    inst.components.lootdropper:SetChanceLootTable('tubertree')
+    inst.components.lootdropper:SetLoot({})
 
     inst:AddComponent("workable")
     inst.components.workable:SetWorkAction(ACTIONS.HACK)
     inst.components.workable:SetWorkLeft(10)
     inst.components.workable:SetOnWorkCallback(chop_tree)
     inst.components.workable:SetOnFinishCallback(chop_down_tree)
+    TuberHarvest.Configure(inst, chop_down_tree)
 
     MakeHauntableWorkAndIgnite(inst)
 
@@ -223,7 +231,7 @@ local function fn()
     inst.OnLoad = onload
     MakeSnowCovered(inst)
 
-    inst:WatchWorldState("startday", OnSeasonChange)
+    inst:WatchWorldState("issummer", OnSeasonChange)
     inst:DoTaskInTime(0, OnSeasonChange)
 
     return inst

@@ -58,8 +58,8 @@ local function fn()
     inst:AddComponent("waterproofer")
     inst.components.waterproofer:SetEffectiveness(TUNING.WATERPROOFNESS_SMALL)
 
-    --    inst:AddComponent("windproofer")
-    --    inst.components.windproofer:SetEffectiveness(1) 100%
+    inst:AddComponent("windproofer")
+    inst.components.windproofer:SetEffectiveness(1)
 
     return inst
 end

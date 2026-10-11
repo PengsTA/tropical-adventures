@@ -1,6 +1,7 @@
 local TROENV = env
 GLOBAL.setfenv(1, GLOBAL)
 
+
 local function GetWaveBearing(map, ex, ey, ez)
 	local radius = 3.5
 	local tx, tz = ex % TILE_SCALE, ez % TILE_SCALE
@@ -144,6 +145,34 @@ local function calcPerSecMult(min, max)
 	return mult
 end
 
+local FLOOD_RIPPLES_PER_SECOND = 8
+local FLOOD_RIPPLE_ATTEMPTS = 12
+
+local function TrySpawnFloodRipple()
+    local player = ThePlayer
+    local visuals = player ~= nil and player.components.floodwatervisuals or nil
+    if visuals == nil or not visuals:IsInFloodRegion() then
+        return false
+    end
+
+    local x, _, z = player.Transform:GetWorldPosition()
+    local radius = calcShimmerRadius()
+    for _ = 1, FLOOD_RIPPLE_ATTEMPTS do
+        local angle = math.random() * 2 * PI
+        local distance = math.sqrt(math.random()) * radius
+        local wave_x = x + math.cos(angle) * distance
+        local wave_z = z + math.sin(angle) * distance
+        if visuals:IsFloodedAtPoint(wave_x, wave_z) then
+            local wave = SpawnPrefab("wave_shimmer_flood_tropical")
+            if wave ~= nil then
+                wave.Transform:SetPosition(wave_x, 0, wave_z)
+            end
+            return true
+        end
+    end
+    return false
+end
+
 
 
 local tro_shimmer = {
@@ -170,5 +199,22 @@ TROENV.AddComponentPostInit("wavemanager", function(cmp)
 		cmp.shimmer[i] = v
 	end
 
-	-- cmp.SetWaveSettings = SetWaveSettings
+	-- Flooded land is not a real map tile in DST, so it cannot be registered
+	-- in shimmer[] like ocean ground. Feed the same wave manager from the
+	-- client-side flood view instead; the view uses the server's synced level
+	-- and the shared deterministic flood pattern.
+	local old_onupdate = cmp.OnUpdate
+	function cmp:OnUpdate(dt)
+		old_onupdate(self, dt)
+		if ThePlayer == nil or ThePlayer.components.floodwatervisuals == nil then
+			return
+		end
+
+		self._tropical_flood_ripple_accumulator =
+			(self._tropical_flood_ripple_accumulator or 0) + dt * FLOOD_RIPPLES_PER_SECOND
+		while self._tropical_flood_ripple_accumulator >= 1 do
+			self._tropical_flood_ripple_accumulator = self._tropical_flood_ripple_accumulator - 1
+			TrySpawnFloodRipple()
+		end
+	end
 end)

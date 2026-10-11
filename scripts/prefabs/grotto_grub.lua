@@ -1,3 +1,4 @@
+local CombatTargets = require("tools/combat_targets")
 local assets =
 {
     Asset("ANIM", "anim/grotto_grub.zip"),
@@ -48,12 +49,10 @@ local function NormalKeepTargetFn(inst, target)
 end
 
 local function OnAttacked(inst, data)
-    local attacker = data.attacker
+    local attacker = CombatTargets.GetAttacker(data)
     inst:ClearBufferedAction()
 
-    if attacker.prefab == "deciduous_root" and attacker.owner then
-        OnAttackedByDecidRoot(inst, attacker.owner)
-    elseif attacker.prefab ~= "deciduous_root" then
+    if attacker then
         inst.components.combat:SetTarget(attacker)
         inst.components.combat:ShareTarget(attacker, 30, function(dude) return dude:HasTag("ant") end, 5)
     end

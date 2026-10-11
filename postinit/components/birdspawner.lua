@@ -32,7 +32,27 @@ local function IsDangerNearby(x, y, z)
     return next(ents) ~= nil
 end
 
-local function RelevantSpawnBird(self, bird_prefab, spawnpoint, ignorebait)
+local function PickTropicalBird(spawnpoint, tile)
+    local x, y, z = spawnpoint:Get()
+    tile = tile or TheWorld.Map:GetTileAtPoint(x, 0, z)
+    local birds = birdvstile[tile]
+    if birds == nil then
+        return
+    end
+
+    local bird_prefab = type(birds) == "table" and GetRandomItem(birds) or birds
+    if bird_prefab == "parrot" and math.random() < 0.1 then
+        bird_prefab = "parrot_pirate"
+    end
+
+    if TheWorld.state.iswinter and not TheWorld.Map:IsTropicalRegionAtPoint(x, 0, z) and not IsOceanTile(tile) then
+        return
+    end
+
+    return bird_prefab
+end
+
+local function RelevantSpawnBird(bird_prefab, spawnpoint, ignorebait)
     if not bird_prefab then
         return
     end
@@ -64,9 +84,7 @@ local function RelevantSpawnBird(self, bird_prefab, spawnpoint, ignorebait)
                 local target_pos = Vector3(x, y, z)
                 local angle = math.random(0, 360)
                 local offset = FindWalkableOffset(target_pos, angle * DEGREES, math.random() + 0.5, 4, false, false)
-                if not offset then return end
-                local prefab_at_target = self:PickBird(target_pos + offset)
-                if bird_prefab == prefab_at_target then
+                if offset ~= nil and bird_prefab == PickTropicalBird(target_pos + offset) then
                     spawnpoint = Vector3(target_pos.x, spawnpoint.y, target_pos.z) + offset
                     bird.bufferedaction = BufferedAction(bird, v, ACTIONS.PICK)
                 end
@@ -99,28 +117,11 @@ AddComponentPostInit("birdspawner", function(self)
         --     return
         -- end
 
-        local bird_prefab = nil
         local x, y, z = spawnpoint:Get()
         local tile = TheWorld.Map:GetTileAtPoint(x, 0, z)
-        local istropicalclimate = TheWorld.Map:IsTropicalAreaAtPoint(x, 0, z)
-        local isocean = IsOceanTile(tile)
 
         if birdvstile[tile] ~= nil then
-            if type(birdvstile[tile]) == "table" then
-                bird_prefab = GetRandomItem(birdvstile[tile])
-            else
-                bird_prefab = birdvstile[tile]
-            end
-
-            if bird_prefab == "parrot" and math.random() < 0.1 --[[ TUNING.PARROT_PIRATE_CHANCE ]] then
-                bird_prefab = "parrot_pirate"
-            end
-
-            if TheWorld.state.iswinter and not istropicalclimate and not isocean then
-                bird_prefab = nil
-            end
-
-            return RelevantSpawnBird(self, bird_prefab, spawnpoint, ignorebait)
+            return RelevantSpawnBird(PickTropicalBird(spawnpoint, tile), spawnpoint, ignorebait)
         else
             if not TheWorld.Map:IsOutsideWorldAtPoint(x, 0, z) then
                 return _SpawnBird(self, spawnpoint, ignorebait)

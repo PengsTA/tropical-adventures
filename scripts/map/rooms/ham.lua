@@ -1,5 +1,14 @@
 local GROUND = GROUND
-local AddRoom = AddRoom
+local RegisterRoom = AddRoom
+local function AddRoom(name, room)
+    local contents = room.contents or {}
+    if (contents.distributeprefabs and contents.distributeprefabs.tree_pillar ~= nil)
+        or (contents.countprefabs and contents.countprefabs.tree_pillar ~= nil) then
+        room.tags = room.tags or {}
+        table.insert(room.tags, "deeprainforest")
+    end
+    RegisterRoom(name, room)
+end
 
 
 
@@ -1861,7 +1870,7 @@ AddRoom("HamBatsAndSlurtles", {
         },
         countprefabs =
         {
-            antcombhomecave = 2,
+            antcombhomecavenursery = 2,
             giantgrubspawner = 1,
             ant_cave_lantern = 2,
             antchest = 1,
@@ -1951,7 +1960,7 @@ AddRoom("HamRockyHatchingGrounds", {
         },
         countprefabs =
         {
-            antcombhomecave = 2,
+            antcombhomecavenursery = 2,
             giantgrubspawner = 1,
             ant_cave_lantern = 2,
         },

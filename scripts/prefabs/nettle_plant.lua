@@ -1,4 +1,5 @@
 local assets = {Asset("ANIM", "anim/nettle.zip"), Asset("SOUND", "sound/common.fsb"), Asset("MINIMAP_IMAGE", "nettle")}
+local ClimateProfiles = require("tools/climateprofiles")
 
 local VINE_REGROW_TIME = 480 * 3
 
@@ -12,7 +13,7 @@ end
 local function makeemptyfn(inst)
     -- inst.AnimState:PlayExtendAnim("shake")
     inst.components.animcontroller:PlayAnimation("shake")
-    inst.AnimState:SetFilter("generic")
+    inst.components.animcontroller:SetFilter("generic")
     inst.AnimState:PlayAnimation("picked", true)
 end
 
@@ -29,18 +30,33 @@ end
 
 local function testForGrowth(inst)
     local tile = TheWorld.Map:GetTileAtPoint(inst.Transform:GetWorldPosition())
-
-    if not TheWorld.state.iswinter and (tile == GROUND.DEEPRAINFOREST or tile == GROUND.RAINFOREST) then
-        inst.components.pickable:Regen()
+    local valid = tile == GROUND.DEEPRAINFOREST or tile == GROUND.RAINFOREST
+        or (GROUND.DEEPRAINFOREST_NOCANOPY ~= nil and tile == GROUND.DEEPRAINFOREST_NOCANOPY)
+    local pickable = inst.components.pickable
+    local wet = inst.components.tropicalplantmoisture:IsWet()
+    local suitable = valid and not ClimateProfiles.IsHamletHumid(TheWorld.state)
+    pickable.caninteractwith = suitable and wet
+    if not suitable then
+        if not pickable:IsBarren() then pickable:MakeBarren() end
+        pickable:Pause()
+    elseif wet then
+        if pickable:IsBarren() then
+            pickable.cycles_left = nil
+            pickable.paused = false
+            pickable:MakeEmpty()
+        else
+            pickable:Resume()
+        end
     else
-        inst.components.pickable:MakeBarren()
+        pickable:Pause()
     end
 end
 
 local function getstatus(inst) if not inst.components.pickable.canbepicked then return "EMPTY" end end
 
 local function ontransplantfn(inst)
-	inst.components.pickable:MakeBarren()
+    inst.components.pickable:MakeEmpty()
+    testForGrowth(inst)
 end
 
 local function fn()
@@ -90,6 +106,9 @@ local function fn()
     inst:AddComponent("inspectable")
 
     inst:AddComponent("lootdropper")
+    inst:AddComponent("tropicalplantmoisture")
+    inst:ListenForEvent("itemwet", testForGrowth)
+    inst:ListenForEvent("itemdry", testForGrowth)
     inst.components.inspectable.getstatus = getstatus
 
     local workable = inst:AddComponent("workable")
@@ -102,9 +121,8 @@ local function fn()
     MakeMediumBurnable(inst)
     MakeSmallPropagator(inst)
     -- inst.components.burnable:MakeDragonflyBait(1)
-    MakeNoGrowInWinter(inst)
-
     inst:WatchWorldState("season", testForGrowth)
+    inst:DoTaskInTime(0, testForGrowth)
     --		inst:ListenForEvent("seasonChange", function(it, data) testForGrowth(inst) end, TheWorld)
 
     return inst

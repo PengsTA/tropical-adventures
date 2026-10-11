@@ -1,0 +1,9 @@
+<Atlas>
+    <Texture filename="room_frame.tex" />
+    <Elements>
+        <Element name="room_frame_top.tex" u1="0.0625" u2="0.9375" v1="0.001953125" v2="0.052734375" />
+        <Element name="room_frame_left.tex" u1="0.001953125" u2="0.052734375" v1="0.0625" v2="0.9375" />
+        <Element name="room_frame_right.tex" u1="0.947265625" u2="0.998046875" v1="0.0625" v2="0.9375" />
+        <Element name="room_frame_bottom.tex" u1="0.0625" u2="0.9375" v1="0.947265625" v2="0.998046875" />
+    </Elements>
+</Atlas>

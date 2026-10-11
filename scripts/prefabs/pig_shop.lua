@@ -1,5 +1,6 @@
 require "prefabutil"
 require "recipes"
+local ShopRoomBuilder = require "tools/shop_room_builder"
 
 local assets =
 {
@@ -41,7 +42,20 @@ shops =
 
 local prefabs =
 {
-
+    "pig_shop_academy_room_builder",
+    "pig_shop_antiquities_room_builder",
+    "pig_shop_arcane_room_builder",
+    "pig_shop_bank_room_builder",
+    "pig_shop_cityhall_room_builder",
+    "pig_shop_cityhall_player_room_builder",
+    "pig_shop_deli_room_builder",
+    "pig_shop_florist_room_builder",
+    "pig_shop_general_room_builder",
+    "pig_shop_hatshop_room_builder",
+    "pig_shop_hoofspa_room_builder",
+    "pig_shop_produce_room_builder",
+    "pig_shop_tinker_room_builder",
+    "pig_shop_weapons_room_builder",
 }
 
 local SHOPSOUND_ENTER1 = "Hamlet/common/objects/store/door_open"
@@ -502,6 +516,8 @@ local function makefn(name, build, bank, data)
 
         inst.OnSave = onsave
         inst.OnLoad = onload
+
+        inst:DoTaskInTime(0, ShopRoomBuilder.ScheduleForExterior)
 
         inst:ListenForEvent("onbuilt", onbuilt)
         inst:DoTaskInTime(math.random(), function()

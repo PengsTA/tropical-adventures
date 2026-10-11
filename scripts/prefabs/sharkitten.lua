@@ -55,18 +55,8 @@ local function OnAttacked(inst, data)
     end
 
 
-    for k, v in pairs(Ents) do
-        if v.prefab == "tigershark" then
-            if v:HasTag("aquatic") then
-                v:Hide()
-                v.Transform:SetPosition(x, y, z)
-                v.sg:GoToState("fallwarn")
-                v.components.combat:SuggestTarget(data.attacker)
-            else
-                v.components.combat:SuggestTarget(data.attacker)
-                v.sg:GoToState("jump")
-            end
-        end
+    if data ~= nil and data.attacker ~= nil then
+        TheWorld.components.tigersharker:Protect(inst:GetPosition(), data.attacker)
     end
 end
 

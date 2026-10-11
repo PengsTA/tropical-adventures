@@ -49,7 +49,7 @@ end
 local function trigger(inst)
     if inst:HasTag("trap_dart") then
         local pt = Vector3(inst.Transform:GetWorldPosition())
-        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 50, { "dartthrower" }, { "INTERIOR_LIMBO" })
+        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 50, { "dartthrower" }, { "INTERIOR_LIMBO", "ta_cave_ruins_trap" })
         for i, ent in ipairs(ents) do
             if ent.components.autodartthrower then
                 ent.components.autodartthrower:TurnOn()
@@ -63,7 +63,7 @@ local function trigger(inst)
         if inst:HasTag("localtrap") then
             dist = 4
         end
-        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, dist, { "spear_trap" }, { "INTERIOR_LIMBO" })
+        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, dist, { "spear_trap" }, { "INTERIOR_LIMBO", "ta_cave_ruins_trap" })
         for i, ent in ipairs(ents) do
             if ent then
                 ent:PushEvent("triggertrap")
@@ -88,7 +88,7 @@ local function untrigger(inst)
         if inst:HasTag("localtrap") then
             dist = 4
         end
-        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, dist, { "spear_trap" }, { "INTERIOR_LIMBO" })
+        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, dist, { "spear_trap" }, { "INTERIOR_LIMBO", "ta_cave_ruins_trap" })
         for i, ent in ipairs(ents) do
             if ent then
                 ent:PushEvent("reset")

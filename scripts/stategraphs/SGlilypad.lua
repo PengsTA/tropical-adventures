@@ -29,7 +29,7 @@ local states =
         onenter = function(inst)
             inst.SoundEmitter:PlaySound("turnoftides/common/together/boat/place")
             inst.SoundEmitter:PlaySound("turnoftides/common/together/water/splash/large",nil,.3)
-            inst.AnimState:PlayAnimation("big_idle")
+            inst.AnimState:PlayAnimation(inst.size .. "_idle")
         end,
 
         events =
@@ -42,7 +42,7 @@ local states =
     {
         name = "idle",
         onenter = function(inst)
-            inst.AnimState:PlayAnimation("big_idle", true)
+            inst.AnimState:PlayAnimation(inst.size .. "_idle", true)
         end,
 
         events =
@@ -70,7 +70,7 @@ local states =
         onenter = function(inst)
             local fx_boat_crackle = SpawnPrefab("fx_boat_crackle")
             fx_boat_crackle.Transform:SetPosition(inst.Transform:GetWorldPosition())
-            inst.AnimState:PlayAnimation("big_splash") 
+            inst.AnimState:PlayAnimation(inst.size .. "_splash")
             inst.sg:SetTimeout(1)
 
             for k,v in pairs(inst.components.walkableplatform:GetEntitiesOnPlatform()) do

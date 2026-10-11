@@ -33,26 +33,35 @@ local PollenOver = Class(Widget, function(self, owner)
     self.startline = 30
 
     self.lastsneezetime = 9999
+    self.sneezedeadline = nil
 
     self.sneezecountdown = 1
 
     self.level2 = 0
+    self.stoptask = nil
 
-    self:StartUpdating()
+    self:StopUpdating()
 end)
 
 function PollenOver:UpdateState(sneezetime)
-    self.lastsneezetime = sneezetime
+    self.lastsneezetime = sneezetime or 9999
+    self.sneezedeadline = self.lastsneezetime < 999 and GetTime() + self.lastsneezetime or nil
     if self.lastsneezetime < 0 then self.lastsneezetime = 9999 end
-    if self.lastsneezetime and self.lastsneezetime < 50 then
-        -- print("startupdating bcz event")
-        -- print(sneezetime)
+    if self.stoptask ~= nil then
+        self.stoptask:Cancel()
+        self.stoptask = nil
+    end
+    if self.lastsneezetime < 999 then
         self:StartUpdating()
         self:Show()
     end
 end
 
 function PollenOver:OnUpdate(dt)
+    if self.sneezedeadline ~= nil then
+        self.lastsneezetime = math.max(0, self.sneezedeadline - GetTime())
+    end
+
     local leveltarget = self.level
 
     -- PLAYER IS CLOSE TO SNEEZING
@@ -92,21 +101,22 @@ function PollenOver:OnUpdate(dt)
     local circle = (self.lastsneezetime % 5) / 5 * TWOPI
     local breath = math.min(1, (math.cos(circle) + 1.8))
 
-    if self.level > 0 then
-        self.level = self.level * breath
-    end
-
-    if self.level2 > 0 then
-        self.level2 = self.level2 * breath
-    end
-
     if (self.level > 0 or self.level2 > 0) then
+        if self.stoptask ~= nil then
+            self.stoptask:Cancel()
+            self.stoptask = nil
+        end
         self:Show()
-        self.bg:SetTint(1, 1, 1, self.level)
-        self.bg2:SetTint(1, 1, 1, self.level2)
+        self.bg:SetTint(1, 1, 1, self.level * breath)
+        self.bg2:SetTint(1, 1, 1, self.level2 * breath)
     else
         self:Hide()
-        self.owner:DoTaskInTime(2, function() self:StopUpdating() end)
+        if self.sneezedeadline == nil and self.stoptask == nil then
+            self.stoptask = self.owner:DoTaskInTime(2, function()
+                self.stoptask = nil
+                self:StopUpdating()
+            end)
+        end
     end
 
     -- print("pollen is updating")

@@ -1,42 +1,21 @@
-local prefabs =
-{
-    "tigershark",
-}
-
-local respawndays = 30
-
-local function OnTimerDone(inst, data)
-    if data.name == "spawndelay" then
-        local tigershark = SpawnPrefab("tigershark")
-        tigershark.Transform:SetPosition(inst.Transform:GetWorldPosition())
-        -- tigershark.sg:GoToState("spawnin")
-        tigershark.entrada = 1
-        inst:Remove()
-    end
-end
-
-
-
 local function fn()
     local inst = CreateEntity()
-    inst.entity:AddNetwork()
-
-    inst.entity:SetPristine()
-
-    if not TheWorld.ismastersim then
-        return inst
-    end
-
     inst.entity:AddTransform()
-    --[[Non-networked entity]]
-
+    inst.entity:AddNetwork()
     inst:AddTag("CLASSIFIED")
-
-    inst:AddComponent("timer")
-    inst:ListenForEvent("timerdone", OnTimerDone)
-    inst.components.timer:StartTimer("spawndelay", 60 * 8 * respawndays)
-
+    inst.entity:SetPristine()
+    if not TheWorld.ismastersim then return inst end
+    inst:DoTaskInTime(0, function(marker)
+        local manager = TheWorld.components.tigersharker
+        if manager:GetBoss() == nil then
+            manager.home = { x = marker:GetPosition().x, z = marker:GetPosition().z }
+            if manager.respawn_time == nil then
+                manager:ScheduleRespawn(30 * (TUNING.TOTAL_DAY_TIME or 480))
+            end
+        end
+        marker:Remove()
+    end)
     return inst
 end
 
-return Prefab("tigershark_spawner", fn, nil, prefabs)
+return Prefab("tigershark_spawner", fn, nil, { "tigershark" })

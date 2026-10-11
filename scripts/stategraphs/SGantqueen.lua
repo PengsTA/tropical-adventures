@@ -140,7 +140,7 @@ local states=
         {
             TimeEvent(5*FRAMES, function (inst)  inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/boss/antqueen/atk_3_breath_in") end),
             TimeEvent(22*FRAMES, function(inst) inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/boss/antqueen/insane_LP","insane") end),
-            TimeEvent(25*FRAMES, function(inst) TheWorld:PushEvent("antqueenbattle") end),			
+            TimeEvent(25*FRAMES, function(inst) TheWorld:PushEvent("antqueenbattle", { queen = inst }) end),
             TimeEvent(25*FRAMES, function(inst) 
                 local pt = inst:GetPosition()
                 local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 25, {"player"})

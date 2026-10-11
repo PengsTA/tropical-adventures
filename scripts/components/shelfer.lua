@@ -67,6 +67,7 @@ function Shelfer:GiveGift()
     self.inst.components.inventoryitem.canbepickedup = false
     self.shelf.SetImageFromName(self.shelf, nil, self.slot)
     local item = self.inst.components.pocket:RemoveItem("shelfitem")
+    if item then self.shelf:PushEvent("ta_ruins_looted", { item = item }) end
     if self.shelf:HasTag("pigcurse") then
         if self.shelf.components.timer then
             self.shelf.components.timer:StartTimer("spawndelay", 480 * 60)

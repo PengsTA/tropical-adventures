@@ -133,7 +133,7 @@ AddTask("Rainforest_ruins", {
     keys_given = { KEYS.JUNGLE_DEPTH_2, },
     level_set_piece_blocker = true,
     region_id = "hamlet",
-    room_tags = { "RoadPoison", "hamlet", "tropical", "nohunt", "nohasslers", "not_mainland" },
+    room_tags = { "RoadPoison", "hamlet", "rainforest", "tropical", "nohunt", "nohasslers", "not_mainland" },
     -- room_tags = { "RoadPoison", "moonhunt", "nohunt", "nohasslers", "lunacyarea", "not_mainland" },
     room_choices = {
         ["rainforest_ruins"] = 2,
@@ -414,7 +414,7 @@ AddTask("Deep_lost_ruins_gas", {
     locks = { LOCKS.LOST_JUNGLE },
     keys_given = {},
     region_id = "hamlet_snake",
-    room_tags = { "RoadPoison", "hamlet", "tropical", "nohunt", "nohasslers", "not_mainland" },
+    room_tags = { "RoadPoison", "hamlet", "rainforest", "tropical", "nohunt", "nohasslers", "not_mainland" },
     room_choices = {
         ["deeprainforest_gas"] = math.random(2, 3),
         ["deeprainforest_gas_flytrap_grove"] = math.random(2),
@@ -434,7 +434,7 @@ AddTask("Deep_rainforest", {
     locks = { LOCKS.JUNGLE_DEPTH_1 },
     keys_given = {},
     region_id = "hamlet",
-    room_tags = { "RoadPoison", "hamlet", "tropical", "nohunt", "nohasslers", "not_mainland" },
+    room_tags = { "RoadPoison", "hamlet", "rainforest", "tropical", "nohunt", "nohasslers", "not_mainland" },
     room_choices = {
         ["BG_rainforest_base"] = math.random(2, 3),
         ["BG_deeprainforest_base"] = 1,
@@ -454,7 +454,7 @@ AddTask("Deep_rainforest_2", {
     -- keys_given = {  },
     locks = { LOCKS.DEEPRAINFOREST_CITY2 },
     region_id = "hamlet_palace",
-    room_tags = { "RoadPoison", "hamlet", "tropical", "nohunt", "nohasslers", "not_mainland" },
+    room_tags = { "RoadPoison", "hamlet", "rainforest", "tropical", "nohunt", "nohasslers", "not_mainland" },
     room_choices = {
         ["BG_deeprainforest_base"] = 1,
         ["deeprainforest_spider_monkey_nest"] = 1,
@@ -475,7 +475,7 @@ AddTask("Deep_rainforest_3", {
     locks = { LOCKS.DEEPRAINFOREST_SNAKE },
     -- keys_given = { KEYS.JUNGLE_DEPTH_1,  },
     region_id = "hamlet_snake",
-    room_tags = { "RoadPoison", "hamlet", "tropical", "nohunt", "nohasslers", "not_mainland" },
+    room_tags = { "RoadPoison", "hamlet", "rainforest", "tropical", "nohunt", "nohasslers", "not_mainland" },
     room_choices = {
         ["BG_deeprainforest_base"] = 2,
         ["deeprainforest_fireflygrove"] = 1,
@@ -709,24 +709,33 @@ AddTask("HamMoonCaveForest", {
 })
 
 AddTask("HamArchiveMaze", {
-    ----region_id = "hamlet",
     locks = { LOCKS.HAM_MAZE },
     keys_given = {},
+    required_prefabs = { "aporkalypse_clock", "pig_ruins_sow" },
     room_tags = { "nocavein" },
-    entrance_room = "HamArchiveMazeEntrance",
+    entrance_room = "TaHamRuinsEntrance",
     room_choices =
     {
-        ["ArchiveMazeRooms"] = 8,
+        ["TaHamRuinsMaze"] = 8,
     },
-    room_bg = GROUND.FUNGUSMOON,
+    room_bg = GROUND.FAKE_GROUND,
     maze_tiles = {
-        rooms = { "hamlet_hallway", "hamlet_hallway_two" },
-        bosses = { "hamlet_hallway" },
-        archive = { keyroom = { "hamlet_keyroom" } },
+        rooms = {
+            "hamlet_hallway",
+            "hamlet_hallway_two",
+            "ta_hamlet_clock_vine",
+            "ta_hamlet_clock_bat",
+            "ta_hamlet_clock_ghost",
+            "ta_hamlet_clock_statue",
+            "ta_hamlet_clock_store",
+            "ta_hamlet_clock_overgrown",
+            "ta_hamlet_clock_barricade",
+        },
+        bosses = { "hamlet_hallway", "hamlet_hallway_two" },
         special = { finish = { "hamlet_end" }, start = { "hamlet_start" } },
-        bridge_ground = GROUND.FAKE_GROUND
+        bridge_ground = WORLD_TILES.PIGRUINS_BLUE
     },
-    background_room = "ArchiveMazeRooms",
+    background_room = "TaHamRuinsMaze",
     cove_room_chance = 0,
     cove_room_max_edges = 0,
     make_loop = true,

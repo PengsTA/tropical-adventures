@@ -1,5 +1,4 @@
 require "prefabutil"
-require "recipes"
 
 local assets =
 {
@@ -57,6 +56,9 @@ local function regrow(inst)
         inst:RemoveTag("NOCLICK")
         inst.AnimState:PlayAnimation(getanimname(inst) .. "_pre", true)
         inst.AnimState:PushAnimation(getanimname(inst), true)
+        if inst.Physics then
+            inst.Physics:SetActive(true)
+        end
     end
 end
 
@@ -66,6 +68,9 @@ local function hackedopen(inst)
     inst.components.workable.workable = false
     inst:AddTag("NOCLICK")
     inst.AnimState:PlayAnimation(getanimname(inst), true)
+    if inst.Physics then
+        inst.Physics:SetActive(false)
+    end
 end
 
 local function onhackedfn(inst, hacker, hacksleft)
@@ -75,11 +80,17 @@ local function onhackedfn(inst, hacker, hacksleft)
 
             if inst.stage == 0 then
                 cleardoor(inst)
+                if inst.Physics then
+                    inst.Physics:SetActive(false)
+                end
                 if inst.door then
                     local alvo = inst.door.components.teleporter.targetTeleporter
                     if alvo and alvo.components.vineable and alvo.components.vineable.vines then
                         alvo.components.vineable.vines.stage = 0
                         alvo.components.vineable:SetDoorDissabled(false)
+                        if alvo.components.vineable.vines.Physics then
+                            alvo.components.vineable.vines.Physics:SetActive(false)
+                        end
                     end
                 end
             else
@@ -94,8 +105,10 @@ local function onhackedfn(inst, hacker, hacksleft)
     end
 
     local fx = SpawnPrefab("hacking_fx")
-    local x, y, z = inst.Transform:GetWorldPosition()
-    fx.Transform:SetPosition(x, y + math.random() * 2, z)
+    if fx and fx.Transform then
+        local x, y, z = inst.Transform:GetWorldPosition()
+        fx.Transform:SetPosition(x, y + math.random() * 2, z)
+    end
     inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/vine_hack")
 end
 
@@ -120,6 +133,30 @@ local function setup(inst)
     inst.AnimState:PlayAnimation(getanimname(inst), true)
 end
 
+local function onsave(inst, data)
+    data.stage = inst.stage
+    data.facing = inst.facing
+end
+
+local function onload(inst, data)
+    if data then
+        if data.facing then
+            inst.facing = data.facing
+        end
+        if data.stage then
+            inst.stage = data.stage
+            if inst.stage == 0 then
+                hackedopen(inst)
+            else
+                inst.AnimState:PlayAnimation(getanimname(inst), true)
+                if inst.Physics then
+                    inst.Physics:SetActive(true)
+                end
+            end
+        end
+    end
+end
+
 local function makefn()
     local function fn(Sim)
         local inst = CreateEntity()
@@ -129,7 +166,7 @@ local function makefn()
         inst.entity:AddSoundEmitter()
         inst.entity:AddNetwork()
 
-        --        inst.AnimState:SetOrientation(ANIM_ORIENTATION.RotatingBillboard)
+        MakeObstaclePhysics(inst, .75)
 
         inst.facing = "north"
         inst.stage = 2
@@ -146,20 +183,38 @@ local function makefn()
 
         inst:AddComponent("workable")
         inst.components.workable:SetWorkAction(ACTIONS.HACK)
-        --inst.components.workable:SetUp()
         inst.components.workable.onwork = onhackedfn
         inst.components.workable.workleft = RUINS_DOOR_VINES_HACKS
         inst.components.workable.maxwork = RUINS_DOOR_VINES_HACKS
 
         inst:AddComponent("shearable")
+        inst.components.shearable:SetProduct("cutgrass", 2)
+        inst.canshear = function(inst) return inst.stage > 0 end
+        inst.onshear = function(inst, shearer)
+            inst:hackedopen()
+            cleardoor(inst)
+            if inst.door and inst.door.components.teleporter then
+                local alvo = inst.door.components.teleporter.targetTeleporter
+                if alvo and alvo.components.vineable and alvo.components.vineable.vines then
+                    alvo.components.vineable.vines:hackedopen()
+                    alvo.components.vineable:SetDoorDissabled(false)
+                end
+            end
+            local fx = SpawnPrefab("hacking_fx")
+            if fx and fx.Transform then
+                local x, y, z = inst.Transform:GetWorldPosition()
+                fx.Transform:SetPosition(x, y + math.random() * 2, z)
+            end
+            inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/vine_hack")
+        end
 
         inst:AddComponent("inspectable")
-        -- inst.components.inspectable.getstatus = inspect
 
         inst.setup = setup
-
         inst.regrow = regrow
         inst.hackedopen = hackedopen
+        inst.OnSave = onsave
+        inst.OnLoad = onload
 
         return inst
     end

@@ -44,6 +44,7 @@ local function fn(Sim)
 	inst.entity:AddTransform()
 	inst.entity:AddAnimState()
 
+	MakeInventoryPhysics(inst, nil, 0.7)
 	inst:AddTag("aquatic")
 	inst:AddTag("ignorewalkableplatforms")
 	inst:AddTag("plant")

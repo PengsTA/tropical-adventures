@@ -1,6 +1,9 @@
+local IGNORE_TAGS = { "INLIMBO" }
+
 local function DoSpawn(inst)
     local spawner = inst.components.areaspawner
     if spawner then
+        spawner.task = nil
         spawner.target_time = nil
         spawner:TrySpawn()
         spawner:Start()
@@ -93,19 +96,15 @@ function AreaSpawner:TrySpawn(prefab)
         return false
     end
 
-    if self.spawnphase and GetClock():GetPhase() ~= self.spawnphase then
+    if self.spawnphase and TheWorld.state.phase ~= self.spawnphase then
         return false
     end
 
     if canspawn and (self.range or self.spacing) then
-        local ents = TheSim:FindEntities(pos.x, pos.y, pos.z, self.range or self.spacing)
+        local ents = TheSim:FindEntities(pos.x, pos.y, pos.z, self.range or self.spacing, nil, IGNORE_TAGS)
         local count = 0
         for k, v in pairs(ents) do
             if v.prefab == prefab then
-                if self.spacing and v:GetDistanceSqToInst(self.inst) < self.spacing * self.spacing then
-                    canspawn = false
-                    break
-                end
                 count = count + 1
             end
         end
@@ -115,9 +114,17 @@ function AreaSpawner:TrySpawn(prefab)
     end
 
     local map = TheWorld.Map
-    local x, y, z = pos.x + self.range * (2.0 * math.random() - 1.0), pos.y,
-        pos.z + self.range * (2.0 * math.random() - 1.0)
-    local ground = self.inst:GetCurrentTileType(x, y, z) --map:GetTile(map:GetTileCoordsAtPoint(x, y, z))
+    local radius = math.sqrt(math.random()) * (self.range or 0)
+    local angle = math.random() * TWOPI
+    local x, y, z = pos.x + radius * math.cos(angle), pos.y, pos.z + radius * math.sin(angle)
+    local ground = map:GetTileAtPoint(x, y, z)
+    if map:GetPlatformAtPoint(x, z) ~= nil then return false end
+    if self.spacing ~= nil then
+        local nearby = TheSim:FindEntities(x, y, z, self.spacing, nil, IGNORE_TAGS)
+        for _, entity in ipairs(nearby) do
+            if entity.prefab == prefab then return false end
+        end
+    end
 
     if self.spawntiles then
         local is_validtile = function(ground)
@@ -137,7 +144,8 @@ function AreaSpawner:TrySpawn(prefab)
 
     if canspawn then
         local inst = SpawnPrefab(prefab)
-        -- transform first incase the callback wants to change it
+        if inst == nil then return false end
+        -- Position the entity before notifying its owner.
         inst.Transform:SetPosition(x, y, z)
         if self.onspawn then
             self.onspawn(self.inst, inst, ground)
@@ -146,11 +154,11 @@ function AreaSpawner:TrySpawn(prefab)
     return canspawn
 end
 
-function AreaSpawner:Start()
-    local t = self.basetime + math.random() * self.randtime
+function AreaSpawner:Start(timeoverride)
+    self:Stop()
+    local t = math.max(0, timeoverride or (self.basetime + math.random() * self.randtime))
     self.target_time = GetTime() + t
     self.task = self.inst:DoTaskInTime(t, DoSpawn)
-    --self.inst:StartUpdatingComponent(self)
 end
 
 function AreaSpawner:Stop()
@@ -159,18 +167,9 @@ function AreaSpawner:Stop()
         self.task:Cancel()
         self.task = nil
     end
-    --self.inst:StopUpdatingComponent(self)
 end
 
---[[
-function AreaSpawner:OnEntitySleep()
-	self:Stop()
-end
-
-function AreaSpawner:OnEntityWake()
-	self:Start()
-end
---]]
+AreaSpawner.OnRemoveFromEntity = AreaSpawner.Stop
 
 function AreaSpawner:OnUpdate(dt)
     self:DebugRender()
@@ -201,7 +200,9 @@ function AreaSpawner:OnSave()
         range = self.range,
         density = self.density,
         spacing = self.spacing,
-        spawnphase = self.spawnphase
+        spawnphase = self.spawnphase,
+        spawning = self.target_time ~= nil,
+        time = self.target_time ~= nil and math.max(0, self.target_time - GetTime()) or nil,
     }
 end
 
@@ -213,6 +214,11 @@ function AreaSpawner:OnLoad(data)
         self.density = data.density or self.density
         self.spacing = data.spacing or self.spacing
         self.spawnphase = data.spawnphase or self.spawnphase
+        if data.spawning == false then
+            self:Stop()
+        elseif data.time ~= nil then
+            self:Start(data.time)
+        end
     end
 end
 

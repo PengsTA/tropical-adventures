@@ -1,5 +1,7 @@
 require "brains/antbrain"
 require "stategraphs/SGant2"
+local ClimateProfiles = require("tools/climateprofiles")
+local AntEcology = require("tools/antecology")
 
 local assets =
 {
@@ -16,6 +18,7 @@ local prefabs =
 {
     "monstermeat",
     "chitin",
+    "antman_warrior",
 }
 
 local SPRING_COMBAT_MOD = 1.33
@@ -25,52 +28,20 @@ local ANTMAN_ATTACK_PERIOD = 3
 local ANTMAN_TARGET_DIST = 16
 local ANTMAN_LOYALTY_MAXTIME = 2.5 * 480
 local ANTMAN_LOYALTY_PER_HUNGER = 480 / 25
-local ANTMAN_MIN_POOP_PERIOD = 30 * .5
 
 local ANTMAN_RUN_SPEED = 5
 local ANTMAN_WALK_SPEED = 3
 
-local ANTMAN_MIN = 3
-local ANTMAN_MAX = 4
-local ANTMAN_REGEN_TIME = 30 * 4
-local ANTMAN_RELEASE_TIME = 30
 
 local ANTMAN_ATTACK_ON_SIGHT_DIST = 4
-local ANTMAN_LOYALTY_PER_HUNGER = 480 / 25
 
 local PIG_MIN_POOP_PERIOD = 30 * .5
 
 local MAX_TARGET_SHARES = 5
 local SHARE_TARGET_DIST = 30
 
-local function setEatType(inst, eattype)
-    if eattype == 1 then
-        inst.components.eater:SetDiet({ FOODTYPE.VEGGIE })
-    elseif eattype == 2 then
-        inst.components.eater:SetDiet({ FOODTYPE.SEEDS })
-    elseif eattype == 3 then
-        inst.components.eater:SetDiet({ FOODTYPE.WOOD })
-    elseif eattype == 4 then
-        inst.components.eater:SetDiet({ FOODTYPE.MEAT })
-    end
-end
+local setEatType = AntEcology.SetNurseryDiet
 
-
-local function ontalk(inst, script)
-    --    if inst.is_complete_disguise(ThePlayer) then
-    --        inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/crickant/pick_up")
-    --    else
-    inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/crickant/abandon")
-    --    end
-end
-
-local function SpringMod(amt)
-    if TheWorld.state.isspring then
-        return amt --* SPRING_COMBAT_MOD
-    else
-        return amt
-    end
-end
 
 local function CalcSanityAura(inst, observer)
     if inst.components.follower and inst.components.follower.leader == observer then
@@ -89,6 +60,7 @@ local function ShouldAcceptItem(inst, item)
         return true
     end
     if item.components.edible then
+        if not inst.components.eater:CanEat(item) then return false end
         if (item.components.edible.foodtype == "MEAT" or item.components.edible.foodtype == "HORRIBLE")
             and inst.components.follower.leader
             and inst.components.follower:GetLoyaltyPercent() > 0.9 then
@@ -118,10 +90,12 @@ local function OnGetItemFromPlayer(inst, giver, item)
             --  if item.components.edible.foodtype == "MEAT" or item.components.edible.foodtype == "HORRIBLE" then
             if inst.components.combat.target and inst.components.combat.target == giver then
                 inst.components.combat:SetTarget(nil)
-            elseif giver.components.leader then
+            end
+            if giver.components.leader then
                 inst.SoundEmitter:PlaySound("dontstarve/common/makeFriend")
                 giver.components.leader:AddFollower(inst)
-                inst.components.follower:AddLoyaltyTime(item.components.edible:GetHunger() * ANTMAN_LOYALTY_PER_HUNGER)
+                local hunger = math.max(item.components.edible:GetHunger(), TUNING.CALORIES_TINY)
+                inst.components.follower:AddLoyaltyTime(hunger * ANTMAN_LOYALTY_PER_HUNGER)
             end
         end
         if inst.components.sleeper:IsAsleep() then
@@ -156,7 +130,7 @@ local function OnAttackedByDecidRoot(inst, attacker)
 
     local x, y, z = inst.Transform:GetWorldPosition()
     local ents = nil
-    if TheWorld.state.isspring then
+    if ClimateProfiles.IsHamletRainy(TheWorld.state) then
         ents = TheSim:FindEntities(x, y, z, (SHARE_TARGET_DIST * SPRING_COMBAT_MOD) / 2)
     else
         ents = TheSim:FindEntities(x, y, z, SHARE_TARGET_DIST / 2)
@@ -179,50 +153,34 @@ end
 
 local function OnAttacked(inst, data)
     --print(inst, "OnAttacked")
-    local attacker = data.attacker
+    local attacker = data and data.attacker
+    if attacker == nil then return end
     inst:ClearBufferedAction()
 
     if attacker.prefab == "deciduous_root" and attacker.owner then
         OnAttackedByDecidRoot(inst, attacker.owner)
     elseif attacker.prefab ~= "deciduous_root" then
-        inst.components.combat:SetTarget(attacker)
-        inst.components.combat:ShareTarget(attacker, SHARE_TARGET_DIST, function(dude) return dude:HasTag("ant") end,
-            MAX_TARGET_SHARES)
+        AntEcology.DefendColony(inst, attacker)
     end
 end
 
 local function OnNewTarget(inst, data)
 end
 
-local builds = { "antman_build" } --antman_translucent_build"}-- {"antman_build"}
+local builds = { "antman_build" }
 
-local function is_complete_disguise(target)
-    if not target then return end
-    return target:HasTag("has_antmask") and target:HasTag("has_antsuit") or target:HasTag("antlingual")
-end
+local is_complete_disguise = AntEcology.IsDisguised
 
 local function NormalRetargetFn(inst)
-    return FindEntity(inst, TUNING.PIG_TARGET_DIST,
-        function(guy)
-            if guy.components.health and not guy.components.health:IsDead() and inst.components.combat:CanTarget(guy) and not is_complete_disguise(guy) then
-                if guy:HasTag("monster") then return guy end
-                if guy:HasTag("player") and guy.components.inventory and guy:GetDistanceSqToInst(inst) < ANTMAN_ATTACK_ON_SIGHT_DIST * ANTMAN_ATTACK_ON_SIGHT_DIST and not guy:HasTag("ant_disguise") then
-                    return
-                        guy
-                end
-            end
-        end)
+    return FindEntity(inst, ANTMAN_TARGET_DIST, function(target)
+        return AntEcology.IsIntruder(inst, target, ANTMAN_ATTACK_ON_SIGHT_DIST)
+    end)
 end
 
-local function NormalKeepTargetFn(inst, target)
-    --give up on dead guys, or guys in the dark, or werepigs
-    return inst.components.combat:CanTarget(target)
-        and (not target.LightWatcher or target.LightWatcher:IsInLight())
-        and not (target.sg and target.sg:HasStateTag("transform"))
-end
+local NormalKeepTargetFn = AntEcology.KeepTarget
 
 local function NormalShouldSleep(inst)
-    if inst.components.follower and inst.components.follower.leader then
+    if AntEcology.GetLeader(inst) then
         local fire = FindEntity(inst, 6,
             function(ent)
                 return ent.components.burnable and ent.components.burnable:IsBurning()
@@ -235,30 +193,14 @@ local function NormalShouldSleep(inst)
     end
 end
 
-local function TransformToWarrior(inst, from_limbo)
-    if from_limbo then
-        local warrior = SpawnPrefab("antman_warrior")
-        warrior.Transform:SetPosition(inst.Transform:GetWorldPosition())
-        warrior:AddTag("aporkalypse_cleanup")
-        inst:Remove()
-    else
-        inst.sg:GoToState("transform")
-    end
-end
-
 local function SetNormalAnt(inst)
     inst.AnimState:SetBuild(inst.build)
     inst.AnimState:OverrideSymbol("antman_arm", "antman_translucent_build", "antman_arm")
-    --	inst.AnimState:OverrideSymbol("antman_cheeks", "antman_build", "antman_cheeks")		
-    --	inst.AnimState:OverrideSymbol("antman_ear", "antman_build", "antman_ear")	
-    --	inst.AnimState:OverrideSymbol("antman_head", "antman_build", "antman_head")	
-    --	inst.AnimState:OverrideSymbol("antman_leg", "antman_build", "antman_leg")	
-    --	inst.AnimState:OverrideSymbol("antman_tails", "antman_build", "antman_tail")	
-    --	inst.AnimState:OverrideSymbol("antman_torso", "antman_build", "antman_torso")	
 end
 
 local function common()
     local inst = CreateEntity()
+    inst.ant_caste = "nursery"
     inst.entity:AddNetwork()
     local trans = inst.entity:AddTransform()
     local anim = inst.entity:AddAnimState()
@@ -272,15 +214,20 @@ local function common()
     inst.entity:AddLightWatcher()
 
     inst:AddComponent("talker")
-    inst.components.talker.ontalk = ontalk
-    inst.components.talker.fontsize = 35
-    inst.components.talker.font = TALKINGFONT
-    --inst.components.talker.colour = Vector3(133/255, 140/255, 167/255)
-    inst.components.talker.offset = Vector3(0, -400, 0)
+    AntEcology.SetupSpeech(inst)
 
     MakeCharacterPhysics(inst, 50, .5)
     --    MakePoisonableCharacter(inst)
 
+    anim:SetBank("antman")
+    anim:PlayAnimation("idle_loop", true)
+    anim:Hide("hat")
+    inst:AddTag("character")
+    inst:AddTag("ant")
+    inst:AddTag("antman")
+    inst:AddTag("insect")
+    inst:AddTag("scarytoprey")
+    inst:AddTag("trader")
     inst.entity:SetPristine()
 
     if not TheWorld.ismastersim then
@@ -291,44 +238,35 @@ local function common()
     inst.components.locomotor.runspeed = ANTMAN_RUN_SPEED   --5
     inst.components.locomotor.walkspeed = ANTMAN_WALK_SPEED --3
 
-    inst:AddTag("character")
-    inst:AddTag("ant")
-    inst:AddTag("insect")
-    inst:AddTag("scarytoprey")
-    anim:SetBank("antman")
-    anim:PlayAnimation("idle_loop")
-    anim:Hide("hat")
 
     inst.combatTargetWasDisguisedOnExit = false
 
     ------------------------------------------
     inst:AddComponent("eater")
-    inst.eattype = math.random(4)
-    setEatType(inst, inst.eattype)
+    AntEcology.SetupNurseryDiet(inst)
+    inst.SetEatType = setEatType
 
     inst:AddComponent("inventoryitem")
     inst.components.inventoryitem.nobounce = true
     inst.components.inventoryitem.canbepickedup = false
     inst.components.inventoryitem:SetSinks(true)
 
-    inst.components.eater:SetCanEatHorrible()
-    --    table.insert(inst.components.eater.foodprefs, "RAW")
-    --    table.insert(inst.components.eater.ablefoods, "RAW")
     inst.components.eater.strongstomach = true -- can eat monster meat!
     inst.components.eater:SetOnEatFn(OnEat)
     ------------------------------------------
     inst:AddComponent("combat")
+    AntEcology.SetupAggro(inst)
     inst.components.combat.hiteffectsymbol = "antman_torso"
 
     MakeMediumBurnableCharacter(inst, "antman_torso")
 
     inst:AddComponent("named")
-    inst.components.named.possiblenames = STRINGS.ANTNAMES
-    inst.components.named:PickNewName()
+    AntEcology.NameWorker(inst)
 
     ------------------------------------------
     inst:AddComponent("follower")
     inst.components.follower.maxfollowtime = ANTMAN_LOYALTY_MAXTIME
+    AntEcology.ConfigureFriendship(inst)
     ------------------------------------------
     inst:AddComponent("health")
 
@@ -350,6 +288,7 @@ local function common()
     inst.components.trader:SetAcceptTest(ShouldAcceptItem)
     inst.components.trader.onaccept = OnGetItemFromPlayer
     inst.components.trader.onrefuse = OnRefuseItem
+    inst.components.trader.deleteitemonaccept = false
 
     ------------------------------------------
 
@@ -367,24 +306,12 @@ local function common()
 
     inst:AddComponent("inspectable")
     inst.components.inspectable.getstatus = function(inst)
-        if inst.components.follower.leader ~= nil then
+        if AntEcology.GetLeader(inst) ~= nil then
             return "FOLLOWER"
         end
     end
 
-
-
-
-
-
-
-
-
     ------------------------------------------
-
-
-
-
 
     inst.components.sleeper:SetResistance(2)
 
@@ -410,7 +337,7 @@ local function common()
     inst.components.combat:SetRetargetFunction(3, NormalRetargetFn)
     inst.components.combat:SetTarget(nil)
     inst:ListenForEvent("suggest_tree_target", function(inst, data)
-        if data and data.tree and inst:GetBufferedAction() ~= ACTIONS.CHOP then
+        if not AntEcology.IsNursery(inst) and data and data.tree and inst:GetBufferedAction() ~= ACTIONS.CHOP then
             inst.tree_target = data.tree
         end
     end)
@@ -418,23 +345,9 @@ local function common()
     inst.components.trader:Enable()
     inst.components.talker:StopIgnoringAll()
 
-
-
-
-
-
-
-
-
-
     local brain = require "brains/antbrain"
     inst:SetBrain(brain)
     inst:SetStateGraph("SGant2")
-
-
-
-
-
 
     inst.OnSave = function(inst, data)
         data.build = inst.build
@@ -449,14 +362,7 @@ local function common()
             inst.combatTargetWasDisguisedOnExit = data.combatTargetWasDisguisedOnExit
             inst.AnimState:SetBuild(inst.build)
             inst.AnimState:OverrideSymbol("antman_arm", "antman_translucent_build", "antman_arm")
-            --	inst.AnimState:OverrideSymbol("antman_cheeks", "antman_build", "antman_cheeks")		
-            --	inst.AnimState:OverrideSymbol("antman_ear", "antman_build", "antman_ear")	
-            --	inst.AnimState:OverrideSymbol("antman_head", "antman_build", "antman_head")	
-            --	inst.AnimState:OverrideSymbol("antman_leg", "antman_build", "antman_leg")	
-            --	inst.AnimState:OverrideSymbol("antman_tails", "antman_build", "antman_tail")	
-            --	inst.AnimState:OverrideSymbol("antman_torso", "antman_build", "antman_torso")	
-            inst.eattype = data.eattype
-            setEatType(inst, inst.eattype)
+            setEatType(inst, data.eattype or inst.eattype)
         end
     end
 
@@ -465,25 +371,8 @@ local function common()
     inst.is_complete_disguise = is_complete_disguise
 
 
-    --    inst:WatchWorldState("startaporkalypse", function()
-    --        if not inst:IsInLimbo() then
-    --            TransformToWarrior(inst, false)
-    --        end
-    --    end, TheWorld)
+    AntEcology.WatchWorker(inst)
 
-    --    local function CheckForAporkalypse(from_limbo)
-    --        if GetAporkalypse():IsActive() then
-    --            inst:DoTaskInTime(.2, function(inst)
-    --                TransformToWarrior(inst, from_limbo)
-    --            end)
-    --        end
-    --    end
-
-    --    inst:ListenForEvent("exitlimbo", function(inst)
-    --        CheckForAporkalypse(true)
-    --    end)
-
-    --    CheckForAporkalypse(true)
     return inst
 end
 
@@ -492,14 +381,6 @@ local function normal()
     inst.build = builds[math.random(#builds)]
     inst.AnimState:SetBuild(inst.build)
     inst.AnimState:OverrideSymbol("antman_arm", "antman_translucent_build", "antman_arm")
-    --	inst.AnimState:OverrideSymbol("antman_cheeks", "antman_build", "antman_cheeks")		
-    --	inst.AnimState:OverrideSymbol("antman_ear", "antman_build", "antman_ear")	
-    --	inst.AnimState:OverrideSymbol("antman_head", "antman_build", "antman_head")	
-    --	inst.AnimState:OverrideSymbol("antman_leg", "antman_build", "antman_leg")	
-    --	inst.AnimState:OverrideSymbol("antman_tails", "antman_build", "antman_tail")	
-    --	inst.AnimState:OverrideSymbol("antman_torso", "antman_build", "antman_torso")	
-
-
 
     SetNormalAnt(inst)
     return inst

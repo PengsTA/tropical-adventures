@@ -1,4 +1,4 @@
-local CUBES = table.invert({ "default", "shipwrecked", "volcano", "hamlet" })
+local CUBES = table.invert({ "default", "shipwrecked", "volcano", "hamlet", "aporkalypse" })
 
 
 local dormant = resolvefilepath("images/colour_cubes/sw_volcano_cc.tex")
@@ -67,6 +67,18 @@ local REGION_SEASON_COLOURCUBES = {
 			night = dormant,
 			full_moon = dormant
 		},
+		winter = {
+			day = dormant,
+			dusk = dormant,
+			night = dormant,
+			full_moon = dormant
+		},
+		spring = {
+			day = dormant,
+			dusk = dormant,
+			night = dormant,
+			full_moon = dormant
+		},
 		summer = {
 			day = active,
 			dusk = active,
@@ -105,27 +117,26 @@ AddComponentPostInit("colourcube", function(self)
 	local function UpdateAmbientCCTable(blendtime)
 		if _activatedplayer then
 			if TheWorld.state.isaporkalypse and not TheWorld:HasTag("cave") then
-				if _showencc ~= CUBES.aporka then
-					_showencc = CUBES.aporka
+				if _showencc ~= CUBES.aporkalypse then
+					_showencc = CUBES.aporkalypse
 					Upvaluehelper.SetUpvalue(_UpdateAmbientCCTable, REGION_SEASON_COLOURCUBES.aporkalypse, "SEASON_COLOURCUBES")
 				end
-			elseif _activatedplayer:AwareInShipwreckedArea() then
+			elseif _activatedplayer:AwareInShipwreckedVolcanoRegion() then
+				if _showencc ~= CUBES.volcano then
+					_showencc = CUBES.volcano
+					Upvaluehelper.SetUpvalue(_UpdateAmbientCCTable, REGION_SEASON_COLOURCUBES.volcano, "SEASON_COLOURCUBES")
+				end
+			elseif _activatedplayer:AwareInShipwreckedRegion() then
 				--print("colourcube shipwrecked")
 				if _showencc ~= CUBES.shipwrecked then
 					_showencc = CUBES.shipwrecked
 					Upvaluehelper.SetUpvalue(_UpdateAmbientCCTable, REGION_SEASON_COLOURCUBES.shipwrecked, "SEASON_COLOURCUBES")
 				end
-			elseif _activatedplayer:AwareInHamletArea() then
+			elseif _activatedplayer:AwareInHamletRegion() then
 				--print("colourcube hamlet")
 				if _showencc ~= CUBES.hamlet then
 					_showencc = CUBES.hamlet
 					Upvaluehelper.SetUpvalue(_UpdateAmbientCCTable, REGION_SEASON_COLOURCUBES.hamlet, "SEASON_COLOURCUBES")
-				end
-			elseif _activatedplayer:AwareInVolcanoArea() then
-				--print("colourcube volcano")
-				if _showencc ~= CUBES.vlocano then
-					_showencc = CUBES.volcano
-					Upvaluehelper.SetUpvalue(_UpdateAmbientCCTable, REGION_SEASON_COLOURCUBES.volcano, "SEASON_COLOURCUBES")
 				end
 			else
 				--print("colourcube default")
@@ -149,20 +160,24 @@ AddComponentPostInit("colourcube", function(self)
 	local function onClimateDirtyfast()
 		UpdateAmbientCCTable(2)
 	end
+	self.inst:WatchWorldState("isaporkalypse", onClimateDirtyfast)
 	self.inst:ListenForEvent("playeractivated", function(src, player)
 		if player and _activatedplayer ~= player then
+			if _activatedplayer ~= nil then
+				_activatedplayer:RemoveEventCallback("regionchange_client", onClimateDirty)
+			end
 			player:ListenForEvent("regionchange_client", onClimateDirty)
-			self.inst:WatchWorldState("startaporkalypse", onClimateDirtyfast)
-			self.inst:WatchWorldState("stopaporkalypse", onClimateDirtyfast)
-			player:DoTaskInTime(0, function() UpdateAmbientCCTable(.01) end) --initialise
+			player:DoTaskInTime(0, function()
+				if _activatedplayer == player then
+					UpdateAmbientCCTable(.01)
+				end
+			end)
 		end
 		_activatedplayer = player
 	end)
 	self.inst:ListenForEvent("playerdeactivated", function(src, player)
 		if player then
 			player:RemoveEventCallback("regionchange_client", onClimateDirty)
-			player:StopWatchingWorldState("startaporkalypse", onClimateDirtyfast)
-			player:StopWatchingWorldState("stopaporkalypse", onClimateDirtyfast)
 			if _activatedplayer == player then
 				_activatedplayer = nil
 			end

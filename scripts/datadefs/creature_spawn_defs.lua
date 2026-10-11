@@ -37,13 +37,6 @@ local CREATURES   =
         schoolrange = SCHOOL_AREA.MEDIUM,
     },
 
-    pog = {
-        prefab = "pog",
-        schoolmin = 1,
-        schoolmax = 1,
-        schoolrange = SCHOOL_AREA.MEDIUM,
-    },
-
     jellyfish_planted = {
         prefab = "jellyfish_planted",
         schoolmin = 2,
@@ -167,7 +160,6 @@ local TILES       =
     },
     [GROUND.PLAINS] =
     {
-        pog = 0.2,
         zeb = 0.1,
     },
     [GROUND.OCEAN_COASTAL] =

@@ -52,12 +52,19 @@ local HAM_FX =
     	anim = "idle",
     	dlc = true,
 	},
-    {
+	{
     	name = "splash_water",
     	bank = "splash_water",
     	build = "splash_water",
     	anim = "idle",
     	dlc = true,
+	},
+	{
+		name = "splash_footstep",
+		bank = "splash_footstep",
+		build = "splash_footstep",
+		anim = "anim",
+		dlc = true,
 	},
 	{
 		name = "bombsplash",

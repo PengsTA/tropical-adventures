@@ -2,6 +2,7 @@ local TechTree = require("techtree")
 local Utils = require("tools/utils")
 
 local Builder = require("components/builder")
+require("tools/prototyper_policy").ApplyBuilder(Builder)
 
 Utils.FnDecorator(Builder, "MakeRecipeAtPoint", function(self, recipe)
     if not self:KnowsRecipe(recipe) and recipe.level.HOME and recipe.level.HOME <= 2 then
@@ -95,6 +96,13 @@ end)
 --- @replica ---
 ----------------
 local Builder_replica = require("components/builder_replica")
+local InteriorBuildHeight = require "tools/interior_build_height"
+
+local MakeRecipeAtPoint = Builder_replica.MakeRecipeAtPoint
+function Builder_replica:MakeRecipeAtPoint(recipe, ...)
+    InteriorBuildHeight.SyncForBuild(self.inst, recipe)
+    return MakeRecipeAtPoint(self, recipe, ...)
+end
 
 Utils.FnDecorator(Builder_replica, "KnowsRecipe", function(self, recipe)
     if type(recipe) == "string" then

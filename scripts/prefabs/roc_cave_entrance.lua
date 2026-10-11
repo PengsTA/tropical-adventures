@@ -16,7 +16,6 @@ local assets =
 
 local prefabs =
 {
-	"exitcavelight",
 	"roc_nest",
 	"roc_nest_tree1",
 	"roc_nest_tree2",
@@ -207,7 +206,7 @@ local function OnActivate(inst, doer)
 		ProfileStatsSet("wormhole_used", true)
 
 		local other = inst.components.teleporter.targetTeleporter
-		if other ~= nil then
+		if other ~= nil and other:IsValid() then
 			DeleteCloseEntsWithTag("WORM_DANGER", other, 15)
 		end
 
@@ -222,7 +221,7 @@ local function OnActivateexit(inst, doer)
 		ProfileStatsSet("wormhole_used", true)
 
 		local other = inst.components.teleporter.targetTeleporter
-		if other ~= nil then
+		if other ~= nil and other:IsValid() then
 			DeleteCloseEntsWithTag("WORM_DANGER", other, 15)
 		end
 

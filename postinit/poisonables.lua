@@ -35,6 +35,23 @@ end)
 
 local POISON_DEFAULT_DURATION = 60 * 16
 
+local NON_POISONABLE_TAGS = {
+	"wall",
+	"structure",
+	"fence",
+	"gate",
+	"balloon",
+	"smashable",
+	"chess",
+	"mechanical",
+	"robot",
+	"shadow",
+	"shadowcreature",
+	"nightmarecreature",
+	"ghost",
+	"poisonimmune",
+}
+
 local function TargetHasPoisonBlock(target)
 	if target.prefab == "wx78" then
 		return true
@@ -84,7 +101,7 @@ GLOBAL.TroApplyPoison = function(target, dmg, interval, duration)
 	if target == nil or not target:IsValid() or target.components.health == nil then
 		return false
 	end
-	if target:HasTag("poisonimmune") or TargetHasPoisonBlock(target) then
+	if target:HasOneOfTags(NON_POISONABLE_TAGS) or TargetHasPoisonBlock(target) then
 		return false
 	end
 	duration = duration or POISON_DEFAULT_DURATION

@@ -4,22 +4,21 @@ local assets =
 }
 
 
-function dodamageinplayer(inst)
-    local alvo = GetClosestInstWithTag("player", inst, 5)
-    local alvo2 = GetClosestInstWithTag("insect", inst, 5)
-
-    if alvo and alvo.components.health then
-        local gasmask = alvo.components.inventory ~= nil and alvo.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD) or nil
-        if gasmask and gasmask.prefab == "gasmaskhat" then return end
-        if gasmask and gasmask.prefab == "gashat" then return end
-
-        TroApplyPoison(alvo, -2, 1, 2)
-    end
-
-    if alvo2 and alvo2.components.health then
-        if not alvo2:HasTag("player") then
-            alvo2.components.health.invincible = false
-            alvo2.components.health:Kill()
+local function ApplyPoisonMist(inst)
+    local x, y, z = inst.Transform:GetWorldPosition()
+    local targets = TheSim:FindEntities(x, y, z, 5, nil, { "INLIMBO", "playerghost" }, { "player", "insect" })
+    for _, target in ipairs(targets) do
+        local health = target.components.health
+        if health ~= nil and not health:IsDead() then
+            if target:HasTag("player") then
+                local inventory = target.components.inventory
+                local hat = inventory and inventory:GetEquippedItem(EQUIPSLOTS.HEAD)
+                if hat == nil or (hat.prefab ~= "gasmaskhat" and hat.prefab ~= "gashat") then
+                    TroApplyPoison(target, -2, 1, 2)
+                end
+            elseif target:HasTag("insect") and not health:IsInvincible() then
+                health:Kill()
+            end
         end
     end
 end
@@ -29,7 +28,7 @@ local function OnEntityWake(inst)
         inst.updatetask:Cancel()
         inst.updatetask = nil
     end
-    inst.updatetask = inst:DoPeriodicTask(1, function(inst) dodamageinplayer(inst) end)
+    inst.updatetask = inst:DoPeriodicTask(1, ApplyPoisonMist)
 end
 
 local function OnEntitySleep(inst)
@@ -57,8 +56,14 @@ local function fn(Sim)
 
     inst.AnimState:SetSortOrder(3)
 
+    inst.entity:SetPristine()
+    if not TheWorld.ismastersim then
+        return inst
+    end
+
     inst.OnEntitySleep = OnEntitySleep
     inst.OnEntityWake = OnEntityWake
+    inst.OnRemoveEntity = OnEntitySleep
 
     return inst
 end

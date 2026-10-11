@@ -27,6 +27,7 @@ local function fn(Sim)
     inst:AddTag("boatrepairkit")
     inst:AddTag("allow_action_on_impassable")
     inst:AddTag("boat_patch")
+    inst:AddTag("interactions")
 
     inst.entity:SetPristine()
 

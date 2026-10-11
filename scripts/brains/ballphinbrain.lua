@@ -55,6 +55,7 @@ end
 
 local function GoHomeAction(inst)
     if HasValidHome(inst) and
+		not (inst.components.follower and inst.components.follower.leader) and
         not inst.components.combat.target then
             return BufferedAction(inst, inst.components.homeseeker.home, ACTIONS.GOHOME)
     end
@@ -98,6 +99,10 @@ local function KeepFaceTargetFn(inst, target)
 end
 
 local function GetFollowTargetFn(inst)
+    local leader = inst.components.follower and inst.components.follower.leader
+    if leader ~= nil then
+        return leader:IsValid() and leader:HasTag("aquatic") and leader or nil
+    end
     local target = GetClosestInstWithTag("character", inst, START_FOLLOW_DIST)
     if target and not target:HasTag("notarget") and target:HasTag('aquatic') then
         return target
@@ -131,10 +136,12 @@ function BallphinBrain:OnStart()
 		WhileNode(function() return not self.inst:HasTag("ballphinfriend") end, "Not a ballphinfriend", ChaseAndAttack(self.inst, MAX_CHASE_TIME, MAX_CHASE_DIST)),
 		WhileNode(function() return self.inst:HasTag("ballphinfriend") end, "a ballphinfriend", ChaseAndAttack(self.inst, 100)),
         WhileNode( function() return not TheWorld.state.iscaveday end, "Cave nightness", DoAction(self.inst, GoHomeAction, "go home", true )),		
-		Leash(self.inst, function() return self.inst.components.knownlocations:GetLocation("herd") end, 30, 20),
+		WhileNode(function() return not self.inst:HasTag("ballphinfriend") end, "Stay near herd",
+			Leash(self.inst, function() return self.inst.components.knownlocations:GetLocation("herd") end, 30, 20)),
         Follow(self.inst, function() return GetFollowTargetFn(self.inst) end, MIN_FOLLOW_DIST, TARGET_FOLLOW_DIST, MAX_FOLLOW_DIST),
 		FaceEntity(self.inst, GetFaceTargetFn, KeepFaceTargetFn),
 		DoAction(self.inst, FindFoodAction, "eat food", true ),
+		DoAction(self.inst, EatFoodAction, "eat bait", true),
 		Wander(self.inst, function() return self.inst.components.knownlocations:GetLocation("herd") end, GetWanderDistFn),
 	}, .25)
 	self.bt = BT(self.inst, root)

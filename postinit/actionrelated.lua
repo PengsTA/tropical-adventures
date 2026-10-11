@@ -16,10 +16,20 @@ AddComponentPostInit("deployable", function(self, inst)
 end)
 
 AddComponentPostInit("playeractionpicker", function(PlayerActionPicker)
+    local function GetActiveBoat(inst)
+        local sailor = inst ~= nil and inst.replica ~= nil and inst.replica.sailor or nil
+        local boat = sailor ~= nil and sailor:GetBoat() or nil
+        if boat ~= nil then
+            return boat
+        end
+        return inst and inst.replica and inst.replica.inventory
+            and inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) or nil
+    end
+
     local GetRightClickActions = PlayerActionPicker.GetRightClickActions
+
     function PlayerActionPicker:GetRightClickActions(position, target, spellbook)
-        local boat = self.inst and self.inst.replica and self.inst.replica.inventory
-            and self.inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) or nil
+        local boat = GetActiveBoat(self.inst)
         local acts = GetRightClickActions(self, position, target, spellbook) or {}
 
         if #acts <= 0 and boat then
@@ -33,8 +43,7 @@ AddComponentPostInit("playeractionpicker", function(PlayerActionPicker)
 
     local GetLeftClickActions = PlayerActionPicker.GetLeftClickActions
     function PlayerActionPicker:GetLeftClickActions(position, target)
-        local boat = self.inst and self.inst.replica and self.inst.replica.inventory
-            and self.inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) or nil
+        local boat = GetActiveBoat(self.inst)
         local acts = GetLeftClickActions(self, position, target) or {}
 
         if #acts <= 0 and boat and position and TheWorld.Map:IsPassableAtPoint(position:Get()) then

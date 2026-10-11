@@ -47,7 +47,7 @@ local assets                      =
 
 local prefabs                     =
 {
-    "antman2",
+    "antman",
     --    "antman_warrior",
 }
 
@@ -104,7 +104,7 @@ local function fn()
 
 
     inst:AddComponent("childspawner")
-    inst.components.childspawner.childname = "antman2"
+    inst.components.childspawner.childname = "antman"
     inst.components.childspawner:SetRegenPeriod(ANTMAN_REGEN_TIME)
     inst.components.childspawner:SetSpawnPeriod(ANTMAN_RELEASE_TIME)
     inst.components.childspawner:SetMaxChildren(math.random(ANTMAN_MIN, ANTMAN_MAX))

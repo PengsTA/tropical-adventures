@@ -1,3 +1,4 @@
+local InteriorRender = require "tools/interior_render"
 local ANIM_ORIENTATION =
 {
     Default = 0,
@@ -254,6 +255,7 @@ local function onload(inst, data)
             inst.AnimState:SetSortOrder(data.setbackground)
             inst.setbackground = data.setbackground
         end
+        InteriorRender.SetWallDecorationLayer(inst)
         if data.animdata then
             inst.animdata = data.animdata
             if inst.animdata.build then
@@ -460,6 +462,7 @@ local function decofn(build, bank, animframe, data, assets, prefabs)
             inst.setbackground = background
         end
 
+        InteriorRender.SetWallDecorationLayer(inst)
         if physics then
             if physics == "sofa_physics" then
                 MakeInteriorPhysics(inst, 1.3, 1, 0.2)
@@ -786,6 +789,14 @@ local LIGHTS =
         radius    = 1,
     },
 
+    FESTIVETREE =
+    {
+        intensity = 0.9,
+        color     = { 197 / 255, 197 / 255, 50 / 255 },
+        falloff   = 0.5,
+        radius    = 3,
+    },
+
     NONE =
     {
         intensity = 0,
@@ -870,6 +881,12 @@ return
     Prefab("deco_plantholder_marble",
         decofn("interior_floor_decor", "interior_floor_decor", "plant", { tags = { "furniture" }, onbuilt = true }),
         assets, prefabs),
+    Prefab("deco_plantholder_winterfeasttreeofsadness",
+        decofn("interior_plant", "interior_plant", "plant_winterfeasttreeofsadness",
+            { tags = { "furniture" }, onbuilt = true }), assets, prefabs),
+    Prefab("deco_plantholder_winterfeasttree",
+        decofn("interior_floorlamp", "interior_floorlamp", "festivetree_idle",
+            { physics = "post_physics", light = DecoCreator:GetLights().FESTIVETREE, tags = { "furniture" }, onbuilt = true, loopanim = true }), assets, prefabs),
     MakePlacer("deco_plantholder_basic_placer", "interior_plant", "interior_plant", "plant_basic"),
     MakePlacer("deco_plantholder_wip_placer", "interior_plant", "interior_plant", "plant_wip"),
     MakePlacer("deco_plantholder_fancy_placer", "interior_plant", "interior_plant", "plant_fancy"),

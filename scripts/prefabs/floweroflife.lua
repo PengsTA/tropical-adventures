@@ -233,18 +233,15 @@ local function fn(Sim)
 end
 
 local function testforplant(inst)
-	local x, y, z = inst.Transform:GetWorldPosition()
-	local ent = TheSim:FindFirstEntityWithTag("lifeplant")
-
-	if ent and ent:GetDistanceSqToInst(inst) < 1 then
+	local ent = inst.target
+	if ent == nil or not ent:IsValid() or ent:GetDistanceSqToInst(inst) < 1 then
 		inst:Remove()
 	end
 end
 
 local function onspawn(inst)
-	local x, y, z = inst.Transform:GetWorldPosition()
-	local ent = TheSim:FindFirstEntityWithTag("lifeplant")
-	if ent then
+	local ent = inst.target
+	if ent ~= nil and ent:IsValid() then
 		local x2, y2, z2 = ent.Transform:GetWorldPosition()
 		local angle = inst:GetAngleToPoint(x2, y2, z2)
 		inst.Transform:SetRotation(angle)

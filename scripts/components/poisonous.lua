@@ -29,14 +29,15 @@ end)
 
 function Poisonous:OnAttack(target, dmg)
     if target == nil or not target:IsValid() then return end
+    if target:HasTag("wall") or target:HasTag("structure") or target:HasTag("poisonimmune") then return end
     if self.poisontestfn ~= nil and not self.poisontestfn(self.inst, target) then return end
 
     if target:HasTag("player") then
-        local cabeca = target.components.inventory ~= nil and
+        local head = target.components.inventory ~= nil and
             target.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD) or nil
         -- 毒气类来源（剧毒魟）由防毒面具抵挡，护甲类抵挡在 TroApplyPoison 内统一处理
-        if cabeca and cabeca.prefab == "gasmaskhat" and self.inst.prefab == "stungray" then return end
-        if cabeca and cabeca.prefab == "gashat" and self.inst.prefab == "stungray" then return end
+        if head and head.prefab == "gasmaskhat" and self.inst.prefab == "stungray" then return end
+        if head and head.prefab == "gashat" and self.inst.prefab == "stungray" then return end
     end
 
     TroApplyPoison(target, self.dmg, self.interval, self.duration)

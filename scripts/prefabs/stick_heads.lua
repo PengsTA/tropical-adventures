@@ -33,7 +33,6 @@ local beaver_prefabs =
 local tiki_prefabs =
 {
     "flies",
-    "tikimask",
     "twigs",
     "collapse_small",
 }
@@ -202,7 +201,7 @@ local function create_tikistick()
         return inst
     end
 
-    inst.components.lootdropper:SetLoot({"tikimask", "twigs", "twigs"})
+    inst.components.lootdropper:SetLoot({ "twigs", "twigs" })
 
     return inst
 end

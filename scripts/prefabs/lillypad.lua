@@ -1,3 +1,5 @@
+local LilypadSize = require("tools/lilypad_size")
+
 local assets =
 {
     Asset("ANIM", "anim/lily_pad.zip"),
@@ -25,7 +27,7 @@ local prefabs =
     "boat_item_collision",
     "walkingplank",
     "frog_poison",
-    "mosquito",
+    "mosquito_poison",
 }
 
 local sounds = {
@@ -39,7 +41,6 @@ local sounds = {
 }
 
 local BOATBUMPER_MUST_TAGS = { "boatbumper" }
-local BOATCANNON_MUST_TAGS = { "boatcannon" }
 
 
 
@@ -70,18 +71,8 @@ end
 local function groundtest(inst)
     local map = TheWorld.Map
     local ex, ey, ez = inst.Transform:GetWorldPosition()
-    if not map:IsSurroundedByWater(ex, ey, ez, 4) then
+    if not map:IsSurroundedByWater(ex, ey, ez, inst:GetPhysicsRadius()) then
         inst:Remove()
-    end
-end
-
-local function otheritemtest(inst)
-    local ex, ey, ez = inst.Transform:GetWorldPosition()
-    local ents = TheSim:FindEntities(ex, ey, ez, 6)
-    for k, v in pairs(ents) do
-        if v ~= inst then ----------排除自己？
-            v:Remove()
-        end
     end
 end
 
@@ -153,6 +144,7 @@ end
 local function EnableBoatItemCollision(inst)
     if not inst.boat_item_collision then
         inst.boat_item_collision = SpawnPrefab("boat_item_collision")
+        LilypadSize.ResizeItemCollision(inst)
         AddConstrainedPhysicsObj(inst, inst.boat_item_collision)
     end
 end
@@ -205,7 +197,7 @@ local function SpawnFragment(lp, prefix, offset_x, offset_y, offset_z, ignite)
 end
 
 local function GetSafePhysicsRadius(inst)
-    return (inst.components.hull ~= nil and inst.components.hull:GetRadius() or TUNING.BOAT.RADIUS) + 0.18 -- Add a small offset for item overhangs.
+    return inst:GetPhysicsRadius() + 0.18 -- Allow a small item overhang.
 end
 
 local function fn()
@@ -222,7 +214,7 @@ local function fn()
     inst:AddTag("antlion_sinkhole_blocker")
     inst:AddTag("boat")
     inst.sounds = sounds
-    inst.walksound = "marsh" --"tallgrass"
+    inst.walksound = "marsh"
     inst.second_walk_sound = "tallgrass"
     inst.boat_crackle = "fx_boat_crackle"
 
@@ -231,7 +223,7 @@ local function fn()
         local locus_point = Vector3(inst.Transform:GetWorldPosition())
         local num_loot = 3
         for i = 1, num_loot do
-            local r = math.sqrt(math.random()) * (TUNING.BOAT.RADIUS - 2) + 1.5
+            local r = math.sqrt(math.random()) * (inst:GetPhysicsRadius() - 2) + 1.5
             local t = i * PI2 / num_loot + math.random() * (PI2 / (num_loot * .5))
             SpawnFragment(locus_point, "boards", math.cos(t) * r, 0, math.sin(t) * r, ignitefragments)
         end
@@ -245,10 +237,6 @@ local function fn()
     end
 
 
-    local radius = 4
-    local scale = 1 -- math.random() / 2 + 0.25
-    local max_health = TUNING.BOAT.HEALTH + 1000
-
     local phys = inst.entity:AddPhysics()
     phys:SetMass(TUNING.BOAT.MASS * 4)
     phys:SetFriction(10)
@@ -257,7 +245,6 @@ local function fn()
     phys:ClearCollisionMask()
     phys:CollidesWith(COLLISION.WORLD)
     phys:CollidesWith(COLLISION.OBSTACLES)
-    phys:SetCylinder(radius * scale, 3)
 
     inst.AnimState:SetBank("lily_pad")
     inst.AnimState:SetBuild("lily_pad")
@@ -266,10 +253,7 @@ local function fn()
     inst.AnimState:SetOrientation(ANIM_ORIENTATION.OnGround)
     inst.AnimState:SetLayer(LAYER_BACKGROUND)
 
-    inst.AnimState:SetScale(scale, scale, 1)
-
     inst:AddComponent("walkableplatform")
-    inst.components.walkableplatform.radius = radius * scale
     inst.components.walkableplatform.player_collision_prefab = "boat_player_collision"
 
     inst:AddComponent("waterphysics")
@@ -294,8 +278,10 @@ local function fn()
     end
 
     inst:AddComponent("boatringdata")
-    inst.components.boatringdata:SetRadius(radius * scale)
     inst.components.boatringdata:SetNumSegments(8)
+
+    LilypadSize.Configure(inst)
+    inst.GetSafePhysicsRadius = GetSafePhysicsRadius
 
     inst.entity:SetPristine()
 
@@ -310,8 +296,7 @@ local function fn()
     inst.PhysicsWaker:SetTimeBetweenWakeTests(TUNING.BOAT.WAKE_TEST_TIME)
 
     inst:AddComponent("hull")
-    inst.components.hull:SetRadius(radius)
-    --    inst.components.hull:SetBoatLip(SpawnPrefab('boatlip'))
+    inst.components.hull:SetRadius(inst:GetPhysicsRadius())
     inst:AddComponent("boatring")
 
 
@@ -328,11 +313,10 @@ local function fn()
     inst.OnPhysicsSleep = OnPhysicsSleep
 
     inst:DoTaskInTime(0, groundtest)
-    inst:DoTaskInTime(0, otheritemtest)
+    require("tools/lilypad_population").Configure(inst)
+    LilypadSize.ConfigureSaveLoad(inst)
 
     inst.OnLoadPostPass = OnLoadPostPass
-
-    inst.GetSafePhysicsRadius = GetSafePhysicsRadius
 
     return inst
 end

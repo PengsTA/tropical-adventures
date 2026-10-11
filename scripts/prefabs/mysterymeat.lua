@@ -50,8 +50,6 @@ local function fn(Sim)
     inst:AddComponent("inspectable")
     inst:AddComponent("inventoryitem")
 
-    --inst:AddComponent("appeasement")
-    --inst.components.appeasement.appeasementvalue = TUNING.WRATH_SMALL
 
     inst:AddComponent("edible")
     inst.components.edible.healthvalue = TUNING.SPOILED_HEALTH

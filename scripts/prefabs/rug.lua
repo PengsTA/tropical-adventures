@@ -22,8 +22,10 @@ local function smash(inst)
 end
 
 local function setPlayerUncraftable(inst)
+	if inst.onbuilt then
+		return
+	end
 	inst:RemoveTag("NOCLICK")
-	inst.entity:AddSoundEmitter()
 
 	inst:AddComponent("lootdropper")
 
@@ -46,6 +48,9 @@ local function onsave(inst, data)
 end
 
 local function onload(inst, data)
+	if data == nil then
+		return
+	end
 	if data.rotation then
 		inst.Transform:SetRotation(data.rotation)
 	end
@@ -66,6 +71,7 @@ local function commonfn(rugtype)
 	inst.entity:AddNetwork()
 	local trans = inst.entity:AddTransform()
 	local anim = inst.entity:AddAnimState()
+	inst.entity:AddSoundEmitter()
 
 	anim:SetBuild("rugs")
 	anim:SetBank("rugs")
@@ -78,6 +84,10 @@ local function commonfn(rugtype)
 	inst:AddTag("NOCLICK")
 	inst:AddTag("NOBLOCK")
 	inst:AddTag("DECOR")
+	inst.entity:SetPristine()
+	if not TheWorld.ismastersim then
+		return inst
+	end
 
 
 
@@ -137,6 +147,7 @@ local function twosided(name)
 	inst.entity:AddNetwork()
 	local trans = inst.entity:AddTransform()
 	local anim = inst.entity:AddAnimState()
+	inst.entity:AddSoundEmitter()
 
 	inst.Transform:SetTwoFaced()
 
@@ -148,6 +159,10 @@ local function twosided(name)
 
 	inst:AddTag("OnFloor")
 	inst:AddTag("NOCLICK")
+	inst.entity:SetPristine()
+	if not TheWorld.ismastersim then
+		return inst
+	end
 
 	inst.OnSave = onsave
 	inst.OnLoad = onload
@@ -249,6 +264,10 @@ local function cityhall_corners()
 	anim:SetSortOrder(3)
 
 	inst:AddTag("NOCLICK")
+	inst.entity:SetPristine()
+	if not TheWorld.ismastersim then
+		return inst
+	end
 
 	inst.OnSave = onsave
 	inst.OnLoad = onload
@@ -270,6 +289,10 @@ local function palace_corners()
 	anim:SetSortOrder(3)
 
 	inst:AddTag("NOCLICK")
+	inst.entity:SetPristine()
+	if not TheWorld.ismastersim then
+		return inst
+	end
 
 	inst.OnSave = onsave
 	inst.OnLoad = onload
@@ -277,26 +300,27 @@ local function palace_corners()
 	return inst
 end
 
-local rug_rotation = 0
-
 local function placeAlign(inst)
 	if true then
 		inst.AnimState:SetLayer(LAYER_BACKGROUND)
 		inst.AnimState:SetOrientation(ANIM_ORIENTATION.OnGround)
 	end
 	if true then
+		local rug_rotation = inst._ta_placer_rotation or 0
 		if TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_rotation_key][2]) then
 			rug_rotation = rug_rotation + 1
 		elseif TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_rotation_key][1]) then
 			rug_rotation = rug_rotation - 0.25
 		end
 
+		inst._ta_placer_rotation = rug_rotation
 		inst.Transform:SetRotation(rug_rotation)
 	end
 end
 
 
 local function placefn(inst)
+	inst:AddTag("ta_decor_rotation_adjustable")
 	inst.components.placer.onupdatetransform = placeAlign
 end
 

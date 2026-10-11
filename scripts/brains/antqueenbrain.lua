@@ -1,10 +1,17 @@
 require "behaviours/doaction"
+local AntEcology = require("tools/antecology")
 
 local WAKE_UP_DIST = 5.5
 local SLEEP_DIST = 40
 
+local function GetIntruder(inst)
+    return FindEntity(inst, WAKE_UP_DIST, function(player)
+        return AntEcology.IsIntruder(inst, player, WAKE_UP_DIST)
+    end, { "player" })
+end
+
 local function IsPlayerInVicinity(inst)
-    return GetClosestInstWithTag("player", inst, WAKE_UP_DIST) ~= nil
+    return GetIntruder(inst) ~= nil
 end
 
 local function IsPlayerInVicinity2(inst)
@@ -74,7 +81,9 @@ local function JumpAttack(inst)
 end
 
 local function TrySummonWarriors(inst)
-local invader = GetClosestInstWithTag("antmanwarrior", inst, 12)
+    local invader = FindEntity(inst, 12, function(ant)
+        return ant.queen == inst and not ant.components.health:IsDead()
+    end, { "antmanwarrior" })
     if InAvailableState(inst) and not inst.components.health:IsDead() then
         if (not invader and not IsQuaking(inst)) or (inst.last_attack_time and GetTime() - inst.last_attack_time >= 60) then
             
@@ -129,7 +138,7 @@ function AntQueenBrain:OnStart()
             IfNode(function() return IsPlayerInVicinity(self.inst) and IsFirstEncounter(self.inst) and (self.inst.sg.currentstate.name == "sleeping" or self.inst.sg.currentstate.name == "sleep") end, "PlayerInVicinity",
                 DoAction(self.inst, function()
                     if self.inst.components.combat.target == nil then
-                        self.inst.components.combat:SetTarget(GetPlayer())
+                        self.inst.components.combat:SetTarget(GetIntruder(self.inst))
                         WakeUpFn(self.inst)
                     end        
                 end, "WakingUp")),

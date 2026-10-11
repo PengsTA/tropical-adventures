@@ -74,7 +74,6 @@ end
 local function KeepTarget(inst, target)
     local shouldkeep = inst.components.combat:CanTarget(target) and
     inst:IsNear(target, RABID_BEETLE_FOLLOWER_TARGET_KEEP)
-    --    local onboat = target.components.driver and target.components.driver:GetIsDriving()
     return shouldkeep
 end
 

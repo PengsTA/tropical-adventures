@@ -1,5 +1,10 @@
 -- require "prefabutil"
 
+local RoomExtensions = require "tools/interior_room_extensions"
+local InteriorBuildHeight = require "tools/interior_build_height"
+local FixtureDemolition = require "tools/interior_fixture_demolition"
+local InteriorRender = require "tools/interior_render"
+
 local function MakeInteriorPhysics(inst, rad, height, width)
     height = height or 20
 
@@ -46,9 +51,19 @@ end
 
 
 local function setPlayerUncraftable(inst)
-    inst:AddComponent("lootdropper")
-    inst.entity:AddSoundEmitter()
-    inst:AddComponent("workable")
+    if inst._ta_interior_demolition_enabled then
+        return
+    end
+    inst._ta_interior_demolition_enabled = true
+    if inst.components.lootdropper == nil then
+        inst:AddComponent("lootdropper")
+    end
+    if inst.SoundEmitter == nil then
+        inst.entity:AddSoundEmitter()
+    end
+    if inst.components.workable == nil then
+        inst:AddComponent("workable")
+    end
     inst.components.workable:SetWorkAction(ACTIONS.HAMMER)
     inst.components.workable:SetWorkLeft(2)
     inst.components.workable:SetOnFinishCallback(smash)
@@ -62,6 +77,13 @@ local function onBuilt(inst)
 
     if inst:HasTag("wallsection") then
         local pt = inst:GetPosition()
+        local info = RoomExtensions.GetWallBuildInfo(inst, { center_only = false, check_overlap = false })
+        if info ~= nil then
+            inst.Transform:SetPosition(info.x, pt.y, info.z)
+            pt = inst:GetPosition()
+        end
+        InteriorRender.SetWallDecorationLayer(inst)
+
         local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 1, { "wallsection" })
         for i, ent in ipairs(ents) do
             if ent ~= inst then
@@ -73,6 +95,7 @@ end
 
 local function onsave(inst, data)
     data.rotation = inst.Transform:GetRotation()
+    data.playercrafted = inst:HasTag("playercrafted") or nil
     -- data.pos = inst:GetPosition()
     -- data.height = inst.height
 
@@ -94,9 +117,15 @@ local function onload(inst, data)
         if data.scales then
             inst.Transform:SetScale(data.scales.x, data.scales.y, data.scales.z)
         end
-        if data.onbuilt then
+        if data.onbuilt or data.playercrafted then
             inst.onbuilt = data.onbuilt
+            if data.playercrafted then
+                inst:AddTag("playercrafted")
+            end
             setPlayerUncraftable(inst)
+        else
+            -- Older generated decorations saved neither ownership nor workability.
+            FixtureDemolition.RecoverPlayerFixture(inst)
         end
     end
 end
@@ -147,7 +176,21 @@ end
 
 local roomsection_prefabs = {}
 
+local function SetWallScale(inst, scales, wall)
+    local side = wall == "left" or wall == "right"
+    inst.Transform:SetScale(
+        side and (scales.side_x or scales.x) or scales.x,
+        side and (scales.side_y or scales.y) or scales.y,
+        scales.z
+    )
+end
+
 local function RoomSectionfn(prefabname, build, bank, animdata, data)
+    local can_adjust_height = data.changevalue ~= nil and data.changevalue ~= 0
+    if can_adjust_height then
+        InteriorBuildHeight.RegisterPlacer(prefabname .. "_placer")
+    end
+    local can_adjust_rotation = data.rotation ~= nil
     local assets =
     {
         Asset("ANIM", "anim/interior_window.zip"),
@@ -209,24 +252,27 @@ local function RoomSectionfn(prefabname, build, bank, animdata, data)
 
 
         if inst:HasTag("wallsection") then
+            InteriorRender.SetWallDecorationLayer(inst)
+
             inst:DoTaskInTime(0, function(inst)
                 local ground = TheWorld.Map
                 local pt = inst:GetPosition() ---- local a, b, c = inst.Transform:GetWorldPosition()
                 iswall = ground:IsHamRoomWallAtPoint(pt.x, pt.y, pt.z)
+                SetWallScale(inst, scales, iswall)
                 if iswall == "right" then
                     inst.Transform:SetRotation(-180)
                     anim:SetBank(bank .. "_side")
-                    trans:SetScale(scales.x, scales.y, scales.z)
                     -- trans:SetScale(1.5, scales.y, scales.z)
                     -- anim:SetLayer(LAYER_WORLD_BACKGROUND)
                 elseif iswall == "left" then
+                    -- Edge placement may set a 90-degree rotation first.
+                    -- The left-side animation is authored in its normal orientation.
+                    inst.Transform:SetRotation(0)
                     anim:SetBank(bank .. "_side")
-                    trans:SetScale(scales.x, scales.y, scales.z)
                     -- trans:SetScale(1.5, scales.y, scales.z)
                     -- anim:SetLayer(LAYER_WORLD_BACKGROUND)
                 else
                     -- trans:SetScale(1.7, scales.y, scales.z)
-                    trans:SetScale(scales.y, scales.y, scales.z)
                 end
             end)
 
@@ -304,17 +350,19 @@ local function RoomSectionfn(prefabname, build, bank, animdata, data)
         if data.craftable then
             setPlayerUncraftable(inst)
         end
+        inst.EnableInteriorDemolition = setPlayerUncraftable
 
         inst:ListenForEvent("onremove", function()
             onremove(inst)
         end)
 
 
-        inst:ListenForEvent("onbuilt", function()
+        inst:ListenForEvent("onbuilt", function(_, build_data)
             --------怎么合理地加入"playercrafted"这个标签呢，在makeplacer中加吗 .....监听onbuilt就可以。。。
             onBuilt(inst)
             local x, y, z = inst.Transform:GetWorldPosition()
-            inst.height = (data.changevalue and data.changevalue ~= 0) and TUNING.BUILD_HEIGHT or data.height or 0
+            inst.height = can_adjust_height and InteriorBuildHeight.GetPlayerHeight(build_data and build_data.builder) or
+                data.height or 0
 
             inst.Transform:SetPosition(x, inst.height, z)
             -- local pt = inst:GetPosition() ----------------这两行不能放在onbuilt里
@@ -333,31 +381,34 @@ local function RoomSectionfn(prefabname, build, bank, animdata, data)
         local pt = inst:GetPosition()
 
         --------------调整在墙面上的高度
-        if data.height then
+        if can_adjust_height then
             local change = TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_height_key][2]) and data
                 .changevalue or
                 TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_height_key][1]) and
                 -1 * data.changevalue or
                 0
             if change ~= 0 then
-                TUNING.BUILD_HEIGHT = TUNING.BUILD_HEIGHT + change
-                TUNING.BUILD_HEIGHT = math.min(math.max(TUNING.BUILD_HEIGHT, -1), 3)
-                if TheNet:GetIsClient() then
-                    SendModRPCToServer(MOD_RPC["ham_room"]["build_height"], TUNING.BUILD_HEIGHT)
-                end
+                InteriorBuildHeight.AdjustClientHeight(change)
             end
         end
-        inst.Transform:SetPosition(pt.x, data.changevalue ~= 0 and TUNING.BUILD_HEIGHT or data.height or 0, pt.z)
+        inst.Transform:SetPosition(pt.x, can_adjust_height and InteriorBuildHeight.GetClientHeight() or data.height or 0,
+            pt.z)
 
 
-        if data.rotation then
+        if can_adjust_rotation then
+            local rotation = inst._ta_placer_rotation
+            if rotation == nil then
+                rotation = data.rotation or 0
+                inst._ta_placer_rotation = rotation
+            end
             if TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_rotation_key][2]) then
-                data.rotation = 180
+                rotation = 180
             elseif TheInput:IsKeyDown(TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.build_rotation_key][1]) then
-                data.rotation = 0
+                rotation = 0
             end
 
-            inst.Transform:SetRotation(data.rotation)
+            inst._ta_placer_rotation = rotation
+            inst.Transform:SetRotation(rotation)
         end
 
 
@@ -373,23 +424,23 @@ local function RoomSectionfn(prefabname, build, bank, animdata, data)
         end
 
         if inst:HasTag("wallsection") then
+            InteriorRender.SetWallDecorationLayer(inst)
+
             local ground = TheWorld.Map
             local iswall = ground:IsHamRoomWallAtPoint(pt.x, pt.y, pt.z)
+            SetWallScale(inst, scales, iswall)
             if iswall then
                 if iswall == "right" then
                     inst.AnimState:SetBank(bank .. "_side")
                     inst.Transform:SetRotation(180)
-                    data.rotation = inst.Transform:GetRotation()
-                    inst.Transform:SetScale(scales.x, scales.y, scales.z)
+                    inst._ta_placer_rotation = inst.Transform:GetRotation()
                 elseif iswall == "left" then
                     inst.AnimState:SetBank(bank .. "_side")
                     inst.Transform:SetRotation(0)
-                    data.rotation = inst.Transform:GetRotation()
-                    inst.Transform:SetScale(scales.x, scales.y, scales.z)
+                    inst._ta_placer_rotation = inst.Transform:GetRotation()
                 elseif iswall == "back" then
                     inst.AnimState:SetBank(bank)
                     -- inst.Transform:SetRotation(0)
-                    inst.Transform:SetScale(scales.y, scales.y, scales.z)
                 end
             end
         end
@@ -397,6 +448,12 @@ local function RoomSectionfn(prefabname, build, bank, animdata, data)
 
 
     local function placefn(inst)
+        if can_adjust_height then
+            inst:AddTag("ta_decor_height_adjustable")
+        end
+        if can_adjust_rotation then
+            inst:AddTag("ta_decor_rotation_adjustable")
+        end
         inst.components.placer.onupdatetransform = placeAlign
     end
 
@@ -426,7 +483,9 @@ end
 ----------------add windows
 Windowfn("window_greenhouse", "interior_window_greenhouse_build", "interior_window_greenhouse", "day_loop",
     {
-        scales = { x = 1.73, y = 1.5, z = 1 },
+        -- The side animation is about 1.63 times taller than the rear frame.
+        -- Keep both frames below the standard player-house wall top.
+        scales = { x = 0.75, y = 1, z = 1, side_x = 1.2, side_y = 1 },
         changevalue = 0,
         background = true
     })
@@ -504,7 +563,7 @@ Ornamentfn("fish", { prefabname = "deco_antiquities_wallfish" })
 
 local function Lightfn(prefabname, animdata, data)
     local presetdata = {
-        tags = data and data.tags or { "NOBLOCK", "rotatableobject", "DECOR" },
+        tags = data and data.tags or { "NOBLOCK", "rotatableobject", "DECOR", "centerlight" },
         scales = data and data.scales or { x = 1, y = 1, z = 1 },
         height = 0,
         changevalue = data and data.changevalue or 0.02,

@@ -130,7 +130,7 @@ local function harassPlayer(inst)
             item = target.components.inventory:FindItem(function(item) return inst.components.eater:CanEat(item) end)
         end
 
-        if item and distsq(p_pt, m_pt) < FOLLOWPLAYER_DIST * FOLLOWPLAYER_DIST then --  and not (target and target.components.driver and target.components.driver:GetIsDriving()) then
+        if item and distsq(p_pt, m_pt) < FOLLOWPLAYER_DIST * FOLLOWPLAYER_DIST then
             return target
         end
     end
@@ -165,7 +165,10 @@ function PogBrain:OnStart()
 
                 DoAction(self.inst, function() return barkatfriend(self.inst) end, "Bark at friend", true),
 
-                Wander(self.inst, function() return self.inst.components.knownlocations:GetLocation("herd") end,
+                Wander(self.inst, function()
+                    return self.inst.components.knownlocations:GetLocation("home")
+                        or self.inst.components.knownlocations:GetLocation("herd")
+                end,
                     GetWanderDistFn)
             }, .25)
     self.bt = BT(self.inst, root)

@@ -34,8 +34,12 @@ local function OnSave(inst, data)
 end
 
 local function OnLoad(inst, data)
-	inst.jointLayerShown = data.jointLayerShown
-	inst.pipeLayerShown = data.pipeLayerShown
+	if data ~= nil then
+		inst.jointLayerShown = data.jointLayerShown
+		inst.pipeLayerShown = data.pipeLayerShown
+		HideLayers(inst.AnimState)
+		ShowRandomLayers(inst, inst.AnimState)
+	end
 end
 
 local function fn()
@@ -52,6 +56,10 @@ local function fn()
 	anim:SetOrientation(ANIM_ORIENTATION.OnGround)
 	anim:SetLayer(LAYER_BACKGROUND)
 	anim:SetSortOrder(3)
+	inst.entity:SetPristine()
+	if not TheWorld.ismastersim then
+		return inst
+	end
 
 	inst.OnSave = OnSave
 	inst.OnLoad = OnLoad

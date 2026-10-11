@@ -11,9 +11,12 @@ local TimeEvent = TimeEvent
 local FRAMES = FRAMES
 local ACTIONS = ACTIONS
 local EQUIPSLOTS = EQUIPSLOTS
+local BoatEquip = require("tools/boat_equipment_helper")
 
 
 local function ConfigureSailState(inst)
+    local boat = inst.replica.sailor ~= nil and inst.replica.sailor:GetBoat() or nil
+    local has_sail = inst:HasTag("sail") or BoatEquip.HasSail(boat)
     if inst.components.inventory:IsHeavyLifting() then
         inst.sg.statemem.heavy = true
         inst.sg:AddStateTag("noslip")
@@ -23,7 +26,7 @@ local function ConfigureSailState(inst)
         inst.sg.statemem.groggy = true
     elseif inst:HasTag("surf") then
         inst.sg.statemem.surf = true
-    elseif inst:HasTag("sail") then
+    elseif has_sail then
         inst.sg.statemem.sail = true
     elseif inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.HANDS) and
         inst.replica.inventory:GetEquippedItem(EQUIPSLOTS.HANDS):HasTag("oar")
@@ -113,6 +116,8 @@ local actionhandlers = {
     ActionHandler(ACTIONS.ACTIVATESAIL, "doshortaction"),
     ActionHandler(ACTIONS.COMPACTPOOP, "doshortaction"),
     ActionHandler(ACTIONS.DESACTIVATESAIL, "doshortaction"),
+    ActionHandler(ACTIONS.BOATEQUIP, "doshortaction"),
+    ActionHandler(ACTIONS.BOATUNEQUIP, "doshortaction"),
     ActionHandler(ACTIONS.BOATMOUNT, "jumponboatstart_pre"),
     ActionHandler(ACTIONS.BOATREPAIR, "dolongaction"),
     ActionHandler(ACTIONS.OPENTUNA, "dolongaction"),
@@ -458,8 +463,8 @@ local states = {
 
         onexit = function(inst)
             ChangeToCharacterPhysics(inst)
-            if inst.components.driver and inst.components.driver.vehicle then
-                inst.components.driver:BoatAttached(inst.components.driver.vehicle)
+            if inst.components.sailor ~= nil and inst.components.sailor.pending_boat ~= nil then
+                inst.components.sailor:FinishBoatJump()
             end
             if inst.bufferedaction == inst.sg.statemem.action then
                 inst:ClearBufferedAction()
@@ -977,8 +982,31 @@ local states = {
 
         ontimeout = function(inst)
             inst.sg:GoToState("row_loop")
-        end
+        end,
 
+        events = {
+            EventHandler("trawl_item", function(inst) inst.sg:GoToState("trawlover") end),
+        },
+
+    },
+
+    State { name = "trawlover",
+        tags = { "moving", "running", "canrotate", "sailing", "autopredict" },
+        onenter = function(inst)
+            ConfigureSailState(inst)
+            inst.components.locomotor:RunForward()
+            inst.AnimState:PlayAnimation("trawlover")
+            inst.sg:SetTimeout(inst.AnimState:GetCurrentAnimationLength())
+        end,
+        onupdate = function(inst)
+            inst.components.locomotor:RunForward()
+        end,
+        events = {
+            EventHandler("trawl_item", function(inst) inst.sg:GoToState("trawlover") end),
+        },
+        ontimeout = function(inst)
+            inst.sg:GoToState("row_loop")
+        end,
     },
 
     State { name = "row_stop",

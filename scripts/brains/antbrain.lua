@@ -9,6 +9,7 @@ require "behaviours/findlight"
 require "behaviours/panic"
 require "behaviours/chattynode"
 require "behaviours/leash"
+local AntEcology = require("tools/antecology")
 
 
 local MIN_FOLLOW_DIST = 2
@@ -91,7 +92,8 @@ local function FindFoodAction(inst)
     local noveggie = time_since_eat and time_since_eat < TUNING.PIG_MIN_POOP_PERIOD*4
     
     if not target and (not time_since_eat or time_since_eat > TUNING.PIG_MIN_POOP_PERIOD*2) then
-        target = FindEntity(inst, SEE_FOOD_DIST, function(item) 
+        target = FindEntity(inst, SEE_FOOD_DIST, function(item)
+                if not AntEcology.InWorkArea(inst, item, 8) then return false end
 				if item:GetTimeAlive() < 8 then return false end
 				if item.prefab == "mandrake" then return false end
 				if noveggie and item.components.edible and item.components.edible.foodtype ~= "MEAT" then
@@ -108,7 +110,8 @@ local function FindFoodAction(inst)
     end
 
     if not target and (not time_since_eat or time_since_eat > TUNING.PIG_MIN_POOP_PERIOD*2) then
-        target = FindEntity(inst, SEE_FOOD_DIST, function(item) 
+        target = FindEntity(inst, SEE_FOOD_DIST, function(item)
+                if not AntEcology.InWorkArea(inst, item, 8) then return false end
                 if not item.components.shelf then return false end
                 if not item.components.shelf.itemonshelf or not item.components.shelf.cantakeitem then return false end
                 if noveggie and item.components.shelf.itemonshelf.components.edible and item.components.shelf.itemonshelf.components.edible.foodtype ~= "MEAT" then
@@ -139,6 +142,7 @@ local function KeepChoppingAction(inst)
 end
 
 local function StartChoppingCondition(inst)
+    if AntEcology.IsNursery(inst) then return false end
     local start_chop = inst.components.follower.leader and inst.components.follower.leader.sg and inst.components.follower.leader.sg:HasStateTag("chopping")
     local target = FindEntity(inst, SEE_TREE_DIST/3, function(item) 
         return item.prefab == "deciduoustree" and item.monster and item.components.workable and item.components.workable.action == ACTIONS.CHOP 
@@ -183,10 +187,11 @@ local function GoHomeAction(inst)
 end
 
 local function GetLeader(inst)
-    return inst.components.follower.leader 
+    return AntEcology.GetLeader(inst)
 end
 
 local function GetHomePos(inst)
+    if AntEcology.IsNursery(inst) then return AntEcology.GetHomePosition(inst) end
     return HasValidHome(inst) and inst.components.homeseeker:GetHomePos()
 end
 
@@ -198,7 +203,7 @@ local function GetNoLeaderHomePos(inst)
 end
 
 local function GetFaceTargetLeaderFn(inst)
-    return inst.components.follower.leader
+    return GetLeader(inst)
 end
 
 local function KeepFaceTargetLeaderFn(inst, target)
@@ -211,34 +216,9 @@ end)
 
 
 
-local function translationfn(inst)
-    local player = GetClosestInstWithTag("player", inst, 30)
-    if player and player:HasTag("antlingual") then        
-        return true
-    else
-        return false
-    end
-end
-
-local function getFoodStrings(inst)
-    if inst.eattype == 1 then
-        return STRINGS.ANT_TALK_WANT_VEGGIE
-    elseif inst.eattype == 2 then
-        return STRINGS.ANT_TALK_WANT_SEEDS
-    elseif inst.eattype == 3 then
-        return STRINGS.ANT_TALK_WANT_WOOD
-    elseif inst.eattype == 4 then
-        return STRINGS.ANT_TALK_WANT_MEAT
-    end
-end
-
-local function makechatpackage(inst, speech)
-local player = GetClosestInstWithTag("antlingual", inst, 30)
-    if player then 
-	return speech
-	else
-	return STRINGS.ANT_TALK_UNTRANSLATED
-	end
+local function ChatterDiet(inst)
+    local key = ({ "ANT_TALK_WANT_VEGGIE", "ANT_TALK_WANT_SEEDS", "ANT_TALK_WANT_WOOD", "ANT_TALK_WANT_MEAT" })[inst.eattype]
+    if key then inst.components.talker:Chatter(key, math.random(#STRINGS[key])) end
 end
 
 local function shouldPanic(inst)
@@ -260,24 +240,27 @@ local function RescueLeaderAction(inst)
 end
 
 function AntBrain:OnStart()
-    --print(self.inst, "PigBrain:OnStart")
+    local nursery = AntEcology.IsNursery(self.inst)
     local root = 
         PriorityNode(
         {
             
             WhileNode(function() return self.inst.components.health.takingfiredamage end, "OnFire",
-				ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_PANICFIRE),
+				ChattyNode(self.inst, "ANT_TALK_PANICFIRE",
 					Panic(self.inst))),
 
-            ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_PANIC),
+            ChattyNode(self.inst, "ANT_TALK_PANIC",
                 WhileNode(function() return shouldPanic(self.inst)  end, "Threat Panic",
                     Panic(self.inst) )),
+
+            IfNode(function() return nursery end, "Stay near nursery",
+                Leash(self.inst, GetHomePos, 10, 6, true)),
             
-            ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_FIGHT),
+            ChattyNode(self.inst, "ANT_TALK_FIGHT",
                 WhileNode( function() return self.inst.components.combat.target == nil or not self.inst.components.combat:InCooldown() end, "AttackMomentarily",
-                    ChaseAndAttack(self.inst, MAX_CHASE_TIME, MAX_CHASE_DIST) )),                
+                    ChaseAndAttack(self.inst, MAX_CHASE_TIME, nursery and 8 or MAX_CHASE_DIST) )),
             
-            ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_FIGHT),
+            ChattyNode(self.inst, "ANT_TALK_FIGHT",
                 WhileNode( function() return self.inst.components.combat.target and self.inst.components.combat:InCooldown() end, "Dodge",
                     RunAway(self.inst, function() return self.inst.components.combat.target end, RUN_AWAY_DIST, STOP_RUN_AWAY_DIST) )),
             
@@ -286,31 +269,31 @@ function AntBrain:OnStart()
             --ChattyNode(self.inst, STRINGS.PIG_TALK_ATTEMPT_TRADE,
             --    FaceEntity(self.inst, GetTraderFn, KeepTraderFn)),            
 
-            ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_FIND_MEAT),
+            ChattyNode(self.inst, "ANT_TALK_FIND_MEAT",
                 DoAction(self.inst, FindFoodAction )),
             
             IfNode(function() return StartChoppingCondition(self.inst) end, "chop", 
                 WhileNode(function() return KeepChoppingAction(self.inst) end, "keep chopping",
                     LoopNode{ 
-                        ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_HELP_CHOP_WOOD),
+                        ChattyNode(self.inst, "ANT_TALK_HELP_CHOP_WOOD",
                             DoAction(self.inst, FindTreeToChopAction ))})),
             
-            ChattyNode(self.inst,makechatpackage(self.inst, STRINGS.ANT_TALK_FOLLOWWILSON), 
+            ChattyNode(self.inst, "ANT_TALK_FOLLOWWILSON",
                 Follow(self.inst, GetLeader, MIN_FOLLOW_DIST, TARGET_FOLLOW_DIST, MAX_FOLLOW_DIST)),
             
             IfNode(function() return GetLeader(self.inst) end, "has leader",
-                ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_FOLLOWWILSON),
+                ChattyNode(self.inst, "ANT_TALK_FOLLOWWILSON",
                     FaceEntity(self.inst, GetFaceTargetLeaderFn, KeepFaceTargetFn ))),
      
             Leash(self.inst, GetNoLeaderHomePos, LEASH_MAX_DIST, LEASH_RETURN_DIST),
 
-            ChattyNode(self.inst, makechatpackage(self.inst, STRINGS.ANT_TALK_KEEP_AWAY),
+            ChattyNode(self.inst, "ANT_TALK_KEEP_AWAY",
                 FaceEntity(self.inst, GetFaceTargetKeepAwayFn, KeepFaceTargetKeepAwayFn)),
 
-            ChattyNode(self.inst, makechatpackage(self.inst, getFoodStrings(self.inst)),
+            ChattyNode(self.inst, ChatterDiet,
                 FaceEntity(self.inst, GetFaceTargetFn, KeepFaceTargetFn)),
 
-            Wander(self.inst, GetNoLeaderHomePos, MAX_WANDER_DIST)
+            Wander(self.inst, GetNoLeaderHomePos, nursery and 6 or MAX_WANDER_DIST)
 
         }, .5)
     

@@ -4,6 +4,7 @@ if TA_CONFIG.DEVELOP.test_mode then --开发人员测试时才可以使用
     modimport "postinit/seafork"
     modimport "postinit/opengift"
     modimport "postinit/widgets/hoverer_info"
+    modimport "postinit/prefabs/test_inspectable"
     --modimport "postinit/components/clockstop"
 end
 
@@ -11,15 +12,8 @@ if TA_CONFIG.DEVELOP.test_map then --开发人员测试时才可以使用
     modimport "postinit/prefabs/test_world"
 end
 
-if not TheNet:IsDedicated() then ---客机读取主机的overrides---似乎也只能在这里读取了
-    -- print("reupdate overrides in client")
-    AddSimPostInit(function()
-        modimport "main/ta_config"
-    end)
-end
-
-
-modimport "postinit/world_map"    --theworld.map相关
+modimport "postinit/world_map"
+modimport "postinit/ruins_teleport"
 modimport "postinit/entityscript" --修改entity相关
 
 
@@ -58,9 +52,9 @@ modimport "postinit/poisonables"            --毒素debuff接口--and loot dropp
 
 
 --components
--- modimport "postinit/components/container"
+modimport "postinit/components/container"
 -- modimport "postinit/components/oceancolor"
--- modimport "postinit/components/playervision"
+modimport "postinit/components/playervision"
 -- modimport "postinit/components/spooked"  --黄蘑菇孢子
 -- modimport "postinit/components/trap"
 
@@ -74,9 +68,11 @@ modimport "postinit/components/animstate"
 modimport "postinit/components/armor"
 modimport "postinit/components/birdspawner"
 modimport "postinit/components/boatphysics"
+modimport "postinit/components/burnable"
 modimport "postinit/components/builder"
 modimport "postinit/components/colourcube"
 modimport "postinit/components/combat"
+modimport "postinit/components/equippable"
 modimport "postinit/components/container_replica"
 modimport "postinit/components/curseditem"
 modimport "postinit/components/dynamicmusic"
@@ -97,6 +93,7 @@ modimport "postinit/components/oceanfishingrod"
 modimport "postinit/components/penguinspawner"
 modimport "postinit/components/plantregrowth" --植物再生
 modimport "postinit/components/playercontroller"
+modimport "postinit/components/prototyper"
 modimport "postinit/components/playerspawner"
 modimport "postinit/components/snowtile" -- disable snow effeccts
 modimport "postinit/components/soundemitter"
@@ -117,12 +114,15 @@ modimport "postinit/components/teleporter" -- 其实这是小房子的夜视
 modimport "postinit/prefabs/blueprints"
 modimport "postinit/prefabs/dock_kit" --甲板相关
 modimport "postinit/prefabs/floatable_items"
+modimport "postinit/prefabs/floodable"
 modimport "postinit/prefabs/gears"
 modimport "postinit/prefabs/hats"
 modimport "postinit/prefabs/inventory_classified"
+modimport "postinit/prefabs/container_classified"
 -- modimport "postinit/prefabs/meatrack"
 modimport "postinit/prefabs/mosquitosack"
 modimport "postinit/prefabs/mushroom_farm"
+modimport "postinit/prefabs/ocean_trawl_targets"
 modimport "postinit/prefabs/player_classified"
 modimport "postinit/prefabs/player" --shopper, drownable, infestable
 modimport "postinit/prefabs/spawned_creature"
@@ -137,6 +137,8 @@ modimport "postinit/prefabs/wurt"
 --screens and widgets
 modimport "postinit/screens/playerhud" ---雾和花粉症效果在这里
 modimport "postinit/widgets/mapstyle"
+modimport "postinit/widgets/interior_minimap"
+modimport "postinit/widgets/house_decor_hint"
 modimport "postinit/widgets/container_boat"
 modimport "postinit/widgets/container_widget_boat"
 modimport "postinit/widgets/container_woodleg_boat"

@@ -1,3 +1,4 @@
+local InteriorRender = require "tools/interior_render"
 local ANIM_ORIENTATION =
 {
     Default = 0,
@@ -173,6 +174,7 @@ local function onload(inst, data)
             inst.AnimState:SetSortOrder(data.setbackground)
             inst.setbackground = data.setbackground
         end
+        InteriorRender.SetWallDecorationLayer(inst)
         if data.animdata then
             inst.animdata = data.animdata
             if inst.animdata.build then
@@ -370,6 +372,8 @@ local function decofn(build, bank, animframe, data, assets, prefabs)
 
                 if iswall == "right" then
                     inst.Transform:SetRotation(-180)
+                elseif iswall == "left" then
+                    inst.Transform:SetRotation(0)
                 end
 
                 print("!!!!!!!!!!!rotation") -----------------问题仍然没有完美解决，rotation为什么会变呢
@@ -408,6 +412,7 @@ local function decofn(build, bank, animframe, data, assets, prefabs)
             inst.setbackground = background
         end
 
+        InteriorRender.SetWallDecorationLayer(inst)
         if physics then
             if physics == "sofa_physics" then
                 MakeObstaclePhysics(inst, 1.3, 1)

@@ -1,4 +1,5 @@
 local tropical_color = { 0, 0.3, 0.3, 1 }
+local RegionDefs = require("tools/regiondefs")
 
 
 local COLOURSETS = {
@@ -30,13 +31,19 @@ AddComponentPostInit("oceancolor", function(self)
 	end
 
 	local _COLOURS = Upvaluehelper.GetUpvalue(self.OnPhaseChanged, "COLORS")
-	COLOURSETS.forest = deepcopy(_COLOURS)
+	COLOURSETS.dst = deepcopy(_COLOURS)
 
 	local _activatedplayer
 	local function OnRegionChanged(src, dat)
 		--print("OnRegionChanged", dat and dat.region)
-		local regionname = REGION_NAMES[dat and dat.region or 1] ----region为什么是个表？
-		local colors = COLOURSETS[regionname] or COLOURSETS.forest
+		local primary = dat ~= nil and dat.primary or nil
+		if primary == nil and src ~= nil then
+			local primary_id = RegionDefs.GetPrimaryIdFromTags(function(tag)
+				return src:HasTag(tag)
+			end)
+			primary = primary_id ~= nil and RegionDefs.GetPrimaryName(primary_id) or nil
+		end
+		local colors = COLOURSETS[primary or "dst"] or COLOURSETS.dst
 
 		local target_color = colors.default
 		if colors[self.phase] ~= nil then
@@ -59,7 +66,7 @@ AddComponentPostInit("oceancolor", function(self)
 	self.inst:ListenForEvent("playeractivated", function(src, player)
 		if player and _activatedplayer ~= player then
 			player:ListenForEvent("regionchange_client", OnRegionChanged)
-			player:DoTaskInTime(0, function() OnRegionChanged() end) --initialise
+			player:DoTaskInTime(0, function() OnRegionChanged(player) end)
 		end
 		_activatedplayer = player
 	end)

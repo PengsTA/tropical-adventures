@@ -88,3 +88,56 @@ function CheckLOSFromPoint(pos, target_pos)
 
     return true
 end
+
+function ReadAtlasXml(filename)
+    -- 1. 尝试读取文件内容
+    local filename = resolvefilepath(filename)
+    local file = io.open(filename, "r")
+    if not file then
+        return nil, "ta无法打开文件: " .. filename
+    end
+    local content = file:read("*a")
+    file:close()
+
+    local atlas_data = {
+        texture_filename = "",
+        elements = {}
+    }
+
+    -- 2. 提取 Texture 节点的 filename 属性
+    -- 模式: 匹配 <Texture filename=" (.*?) "/>
+    -- (.*?) 是非贪婪匹配，捕获引号内的内容
+    local texture_pattern = '<Texture%s+filename="(.-)"%s*/>'
+    local _, _, filename = string.find(content, texture_pattern)
+
+    if filename then
+        atlas_data.texture_filename = filename
+    end
+
+    -- 3. 提取所有 Element 节点及其属性
+    -- 模式: 匹配 <Element ... />
+    -- (.-) 非贪婪匹配，捕获 <Element 到 /> 之间的所有属性内容
+    local element_pattern = '<Element%s+(.-)%s*/>'
+
+    -- 遍历所有 Element 标签
+    for attributes_str in string.gmatch(content, element_pattern) do
+        local element = {}
+
+        -- 4. 提取属性/值对
+        -- 模式: 匹配 (属性名)="(属性值)"
+        -- (%w+) 捕获属性名 (name, u1, v1, etc.)
+        -- "(.-)" 捕获属性值 (非贪婪匹配)
+        for name, value in string.gmatch(attributes_str, '(%w+)="(.-)"') do
+            -- 尝试将数字字符串转换为实际的 Lua number
+            local num_value = tonumber(value)
+
+            -- 将属性名和对应的值存入 element 表中
+            element[name] = num_value or value -- 如果是数字就存数字，否则存字符串
+        end
+
+        -- 将解析好的 element 存入 elements 列表
+        table.insert(atlas_data.elements, element)
+    end
+
+    return atlas_data
+end

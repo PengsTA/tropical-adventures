@@ -71,7 +71,7 @@ local function onthrown(inst, data)
 end
 
 local function poisonattack(inst, attacker, target)
-    TroApplyPoison(target, -4, 5, 120)
+    inst.components.poisonous:OnAttack(target)
     if target.components.combat then
         target.components.combat:SuggestTarget(attacker)
     end
@@ -85,6 +85,7 @@ local function commonfn()
     local inst = CreateEntity()
     local trans = inst.entity:AddTransform()
     local anim = inst.entity:AddAnimState()
+    inst.entity:AddSoundEmitter()
     MakeInventoryPhysics(inst)
     inst.entity:AddNetwork()
 
@@ -143,6 +144,11 @@ local function poisonfn(Sim)
     inst.AnimState:SetBuild("speargun_poison")
     inst.AnimState:SetBank("speargun")
 
+    if not TheWorld.ismastersim then
+        return inst
+    end
+
+    inst:AddComponent("poisonous")
     inst.components.weapon:SetOnAttack(poisonattack)
     inst.components.equippable:SetOnEquip(onequippoison)
 
@@ -168,10 +174,12 @@ end
 local function obsidianfn(Sim)
     local inst = commonfn(Sim)
 
-    inst.entity:AddSoundEmitter()
-
     inst.AnimState:SetBuild("speargun_obsidian")
     inst.AnimState:SetBank("speargun_obsidian")
+    if not TheWorld.ismastersim then
+        return inst
+    end
+
     inst.components.equippable:SetOnEquip(onequipobsidian)
 
     inst.components.weapon:SetOnAttack(fireattack)

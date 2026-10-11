@@ -1,3 +1,5 @@
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local Rammer = Class(function(self, inst)
     self.inst = inst
     self.minSpeed = 2.0
@@ -26,7 +28,6 @@ end
 
 function Rammer:CheckRamHit()
     if self.inst == nil or self.inst:IsValid() == false then
-        print("Component instance is invalid!")
         return
     end
 
@@ -34,43 +35,38 @@ function Rammer:CheckRamHit()
         return
     end
 
-    local driver = self:FindDriver()
+    local pilot = self:FindPilot()
 
-    if driver == nil then
-        print("could not determine quackeringRam's driver, are you using a dev-teleport-boat?")
+    if pilot == nil then
         return
     end
 
-    local driverVelocity = Vector3(driver.Physics:GetVelocity())
+    local pilotVelocity = Vector3(pilot.Physics:GetVelocity())
+    local pilotPosition = Vector3(pilot.Transform:GetWorldPosition())
 
     local function isInHitCone(item)
-        local origin = Vector3(self.inst.Transform:GetWorldPosition())
+        local origin = pilotPosition
         local point = Vector3(item.Transform:GetWorldPosition())
 
-        local d = (point - origin)
-        d = d:GetNormalized()
-
-        if driver == nil or driver.Physics == nil or item == nil or item.Physics == nil then
+        if pilot == nil or pilot.Physics == nil or item == nil or item.Physics == nil then
             return false
         end
 
-        local maxDistance = self.hitRadius + driver.Physics:GetRadius() + item.Physics:GetRadius()
-
-        local l = d:LengthSq()
-        if l > (maxDistance * maxDistance) then
+        local maxDistance = self.hitRadius + pilot.Physics:GetRadius() + item.Physics:GetRadius()
+        local offset = point - origin
+        if offset:LengthSq() > (maxDistance * maxDistance) then
             return false
-        else
-            local v = driverVelocity:GetNormalized()
-            local dot = v:Dot(d)
-            return dot > 0.75
         end
+
+        local direction = offset:GetNormalized()
+        local velocity = pilotVelocity:GetNormalized()
+        return velocity:Dot(direction) > 0.75
     end
 
     local yestags = {}
     local notags = { "falling", "FX", "NOCLICK", "DECOR", "INLIMBO", "unramable" }
 
-    local pos = Vector3(self.inst.Transform:GetWorldPosition())
-    local ents = TheSim:FindEntities(pos.x, pos.y, pos.z, driver.Physics:GetRadius() + self.hitRadius * 2, yestags,
+    local ents = TheSim:FindEntities(pilotPosition.x, pilotPosition.y, pilotPosition.z, pilot.Physics:GetRadius() + self.hitRadius * 2, yestags,
         notags)
 
     for i = #ents, 1, -1 do
@@ -81,9 +77,7 @@ function Rammer:CheckRamHit()
             remove = true
         end
 
-        local driver = self:FindDriver()
-
-        if not remove and item:HasTag("shadow") and driver.components.sanity and not driver.components.sanity:IsCrazy() then
+        if not remove and item:HasTag("shadow") and pilot.components.sanity and not pilot.components.sanity:IsCrazy() then
             remove = true
         end
 
@@ -92,11 +86,11 @@ function Rammer:CheckRamHit()
         end
     end
 
-    -- foreach entity, notify callback
     for k, v in pairs(ents) do
-        if v ~= driver then -- avoid self-ramming
+        if v ~= pilot then
             if isInHitCone(v) then
                 self.onRamTarget(self.inst, v)
+                if not self.inst:IsValid() or self.cooldown > 0 then return end
             end
         end
     end
@@ -105,7 +99,6 @@ end
 function Rammer:OnUpdate(dt)
     local isActive = self:IsActive()
 
-    -- toggle on/off callbacks
     if isActive == true and self.wasActive == false then
         self.onActivate()
     elseif isActive == false and self.wasActive == true then
@@ -114,6 +107,7 @@ function Rammer:OnUpdate(dt)
 
     if isActive then
         self:CheckRamHit()
+        if not self.inst:IsValid() then return end
 
         if self.onUpdate ~= nil then
             self.onUpdate(dt)
@@ -130,29 +124,21 @@ function Rammer:OnUpdate(dt)
     self.wasActive = isActive
 end
 
-function Rammer:FindDriver()
-    local driver = nil
+function Rammer:FindPilot()
     if self.inst == nil or self.inst:IsValid() == false then
         return nil
     end
-    if self.inst.navio1 ~= nil then
-        driver = self.inst.navio1
-        --print(""..self.inst.navio.prefab.."")
-    end
-
-
-    return driver
+    return BoatEquip.GetItemSailor(self.inst)
 end
 
 function Rammer:IsActive()
-    -- TODO: consider storing the driver whenever it changes to avoid the constant lookup
-    local driver = self:FindDriver()
+    local pilot = self:FindPilot()
 
-    if driver == nil then
+    if pilot == nil then
         return false
     end
 
-    local v = Vector3(driver.Physics:GetVelocity())
+    local v = Vector3(pilot.Physics:GetVelocity())
     local minSpeedSq = self.minSpeed * self.minSpeed
 
     return (v:LengthSq() >= minSpeedSq) and (self.cooldown <= 0.0)

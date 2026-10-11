@@ -35,16 +35,33 @@ local WikiDesc = {
         },
 
         house_extension = {
-            name = "House extension",
-            intro = [[do not need [CONSTRUCTION_PERMIT], only need to place [HOUSE_DOOR] on the back wall。
-            Nowadays, the house extension is [tree-like structure], instead of [net-like structure], meanng that you could only place [HOUSE_DOOR] on the back wall.]]
+            name = "House Extension",
+            intro = [[Inside a [playerhouse_city], craft various interior doors (such as [wood_door], [curtain_door], [iron_door], and [stone_door]) using [oinc] under [Interior Technology].
+                    ----------------
+                    【Multi-Directional Expansion】: Doors can be constructed on any room wall (back wall, left wall, right wall, or front wall to exit outside). No longer restricted to a single back-wall branch, rooms can now be expanded in all directions across a 2D coordinate grid.
+                    ----------------
+                    【Expansion & Inheritance】:
+                    1. Room Linking: If an adjacent room already exists in that direction, the newly built door automatically establishes a bidirectional link.
+                    2. New Room: If unlinked, give a [construction_permit] to the door to expand into a new room.
+                    3. Dynamic Inheritance: Newly generated extension rooms dynamically inherit the main house's shell dimensions (width & depth), wall/floor surface styles, layout perimeter, and dedicated interior camera profile, seamlessly matching the master room rather than using a cramped fixed preset.
+                    ----------------
+                    【Demolition & Renovation】:
+                    1. Native Fixtures Demolition: All natively generated furniture, shelves, and wall ornaments inside player houses can be dismantled directly with a standard [hammer] without permits to free up DIY renovation space; shelves will safely drop stored items without loss upon destruction.
+                    2. Room Demolition: To dismantle an entire leaf extension room, offer a [demolition_permit] to the room center beacon. The room will collapse safely and players inside will be relocated to the connected room. Doors can also be hammered down.
+                    ----------------
+                    【Minimap & Visuals】: The interior minimap aligns seamlessly with the HUD frame and progressively reveals rooms as you explore them. Each room retains isolated camera angles, and wall decorations (paintings, wall fish, windows) feature precise depth sorting and adjustable placement heights.]]
         },
         volcano = {
-            name = "Volcano",
-            intro = [[The Volcano currently exists as an [Independent Island] in the overworld.
-                    The [Temperature] inside the Volcano is significantly higher than in other regions.
+            name = "Volcano & Eruptions",
+            intro = [[The Volcano exists as an [independent island] in deep ocean waters. Its interior features the Volcano Altar, obsidian deposits, cacti, and rare [coffeebeans] plants.
                     ----------------
-                    The [Volcano Eruption] mechanic is not yet fully implemented and will not erupt naturally for now.]]
+                    【High Temperatures】: Ambient heat inside the Volcano is significantly higher than other regions; overheating protection is essential.
+                    ----------------
+                    【Dry Season Activity & Warnings】: During the Shipwrecked [Dry Season], the Volcano enters an active cycle. Pre-eruption phases trigger earth tremors, ash fall, and smoke warnings.
+                    ----------------
+                    【Dragonegg Meteor Rain】: Once fully erupting, burning dragonegg meteors rain down from the sky, inflicting massive destructive area damage, igniting flammable objects, and leaving lava pools or dragoon hatchlings.
+                    ----------------
+                    【Altar Appeasement】: Offerings of eggs, [obsidian], and monster meat at the [volcano_altar] (Volcano Altar) delay eruptions and soothe the Volcano; avoid offering unlisted junk.]]
         },
         waves = {
             name = "Waves",
@@ -53,13 +70,25 @@ local WikiDesc = {
         },
 
         floods = {
-            name = "Flooding",
-            intro = [[The flooding mechanic is currently being refined and has been temporarily removed.]]
+            name = "Flooding & Puddles",
+            intro = [[A primary seasonal survival hazard during the Shipwrecked and Hamlet Monsoon/Rainy seasons.
+                    ----------------
+                    【Puddle Expansion】: Persistent seasonal rainfall causes puddles to form on low ground and continuously expand across the land until the late rainy season.
+                    ----------------
+                    【Hazardous Effects】:
+                    1. Movement Slowdown & Wetness: Walking through floodwater inflicts a severe movement speed penalty and rapidly spikes player wetness.
+                    2. Structure Malfunction: Flooded structures—including Crock Pots, Science Machines, Ice Boxes, and Smelters—short-circuit, smoke, and temporarily cease functioning.
+                    3. Poison Mosquitoes: Flooded waters continuously breed hostile [mosquito_poison], posing a severe poisonous swarm threat.
+                    ----------------
+                    【Defense & Recession】: Building [sandbag_item] (Sandbags) along camp perimeters blocks floodwater from encroaching into base structures. Once the rainy season ends, floodwater gradually dries up and submerged facilities resume operation.]]
         },
         ruins = {
             name = "Ruins",
             intro = [[The Ruins are no longer room-based mazes on the surface. Instead, they [Generate Underground]
-                    as a maze system similar to the Ancient [Archive].
+                    overhauled into an expansive subterranean labyrinth similar to the Ancient [Archive].
+                    ----------------
+                    An [ancient_herald] spawns beside the wishing well at the Ruins entrance every 15 days.
+                    The labyrinth features corridors, crossroads, guard chambers, and secret treasure rooms filled with dart statues (linked with basalt mining triggers, depleted visuals), spear traps, and sleeping pressure plates, leading deep into the [aporkalypse_clock]. Teleportation through walls is restricted.
                     ----------------
                     The [CAVE_EXIT] near the Ruins leads to [Snake Island (also Poison Island)].
                     The underground Hamlet region connects to the [Green Mushroom Forest] of the DST caves.]]
@@ -83,6 +112,21 @@ local WikiDesc = {
                     Turn the [aporkalypse_clock] to stop the Aporkalypse.
                     ----------------
                     Now it is compatible with [Don't Starve Alone].]]
+        },
+
+        bermudatriangle = {
+            name = "Bermuda Triangle",
+            intro = [[Paired mysterious oceanic vortexes spawned in deep ocean waters.
+                    ----------------
+                    Sailing through with a [solo boat] or jumping in smoothly teleports you to the paired vortex across the sea with thunder and wave audio.
+                    Includes entity validity checks and dismount safeguards, eliminating falling into deep water and drowning.]]
+        },
+
+        ocean_boundary = {
+            name = "Ocean Boundary Wrapping",
+            intro = [[Faithfully restores the classic Shipwrecked planetary circumnavigation mechanism.
+                    ----------------
+                    Whether piloting a solo boat or a multiplayer ship, sailing to the world edge triggers offshore fog and camera transitions, seamlessly wrapping to the opposite edge of the map.]]
         },
     },
 
@@ -112,7 +156,7 @@ local WikiDesc = {
                     Inside the City Hall, you can also exchange for items like [deed] and [securitycontract] via display cases.]]
         },
         playerhouse_city = {
-            intro = [[Inside, you can craft items via [Interior Tech] to upgrade the house's decor and appearance.]]
+            intro = [[Inside, you can craft items via [Interior Tech] to upgrade the house's decor and appearance. You can also construct doors on walls for [house_extension] (House Extension).]]
         },
         pig_shop_deli = {
             intro = [[Sells high-end cuisine, including [ratatouille], [meatballs], and the expensive [dragonpie].
@@ -172,6 +216,38 @@ local WikiDesc = {
         pig_shop_tinker = {
             intro = [[The Blueprint Shop. Sells various rare blueprints.]]
         },
+        seaworthy = {
+            name = "Seaworthy",
+            intro = [[Cross-world marine transit device. Repairing a broken Seaworthy requires 4 [transistor] and 4 [gears].
+                    ----------------
+                    Building from scratch requires 4 [nightmarefuel], 4 [livinglog], 1 [sunken_boat_trinket_4], 4 [transistor] and 4 [gears]. The defeated Quacken's [krakenchest] always contains one [sunken_boat_trinket_4].
+                    ----------------
+                    Hammering a broken chair returns 4 [nightmarefuel], 4 [livinglog], 1 [sunken_boat_trinket_4] and any contributed upgrade materials. Hammering a repaired chair returns all crafting materials.
+                    ----------------
+                    Sit and right-click to open the navigation menu and warp instantly between known world points. Consumes only a small amount of sanity with smooth screen fades.]]
+        },
+        skyworthy = {
+            name = "Skyworthy",
+            intro = [[Cross-world aerial transit device. Repairing a broken Skyworthy requires 4 [transistor] and 4 [gears].
+                    ----------------
+                    Building from scratch requires 4 [nightmarefuel], 4 [livinglog], 1 [trinket_giftshop_4], 4 [transistor] and 4 [gears].
+                    ----------------
+                    Hammering a broken chair returns 4 [nightmarefuel], 4 [livinglog], 1 [trinket_giftshop_4] and any contributed upgrade materials. Hammering a repaired chair returns all crafting materials.
+                    ----------------
+                    Sit and right-click to open the transit menu and teleport between the mainland, Hamlet, and other known nodes. Consumes only a small amount of sanity with smooth screen fades.]]
+        },
+        sprinkler = {
+            name = "Sprinkler",
+            intro = [[Hamlet agricultural irrigation facility. Consumes fuel to spray cool water mist across a wide radius.
+                    ----------------
+                    Effectively prevents crops and plants from withering in hot seasons, and rapidly rejuvenates withered plants back to life.]]
+        },
+        volcano_altar = {
+            name = "Volcano Altar",
+            intro = [[Ancient altar of snackrifice situated inside the Volcano.
+                    ----------------
+                    During the dry season, offering eggs, [obsidian], or [monstermeat] soothes the volcano and postpones eruptions. Offering unlisted junk enrages the altar, triggering earthquakes and falling rocks.]]
+        },
     },
 
     -- Mobs
@@ -180,14 +256,23 @@ local WikiDesc = {
         twister = { intro = [[A seasonal threat in the Hamlet and Shipwrecked regions.]] },
         slipstor = { intro = [[A peculiar creature found in the Jungle region.]] },
         wildboreking = { intro = [[Similar to the [pigking]; trades for gold but is aggressive.]] },
-        ancient_herald = { intro = [[The avatar of the Aporkalypse. Drops the crafting recipe for the [ARMORVORTEXCLOAK].]] },
+        ancient_herald = {
+            name = "Ancient Herald",
+            intro = [[Harbinger of the Aporkalypse.
+                    ----------------
+                    In addition to invading during the Aporkalypse, a dedicated spawner at the cave Hamlet ruins entrance wishing well summons an Ancient Herald every 15 days.
+                    ----------------
+                    Defeating it drops the crafting blueprint for the [ARMORVORTEXCLOAK] (Vortex Cloak), shadow rags, and nightmare fuel.]]
+        },
         pugalisk = {
             intro = [[During a Full Moon, it spawns from the [pugalisk_fountain].
                     ----------------
                     Defeating it drops the blueprint for the [pugalisk_fountain].]]
         },
         kraken = {
-            intro = [[A deep-sea behemoth. The first [messagebottle_sw] you open can locate its nest.]]
+            intro = [[A deep-sea behemoth. The first [messagebottle_sw] you open can locate its nest.
+                    ----------------
+                    Its reward [krakenchest] always contains one [sunken_boat_trinket_4], used to build a Seaworthy from scratch.]]
         },
 
         pigman_mayor = {
@@ -238,14 +323,34 @@ local WikiDesc = {
         pigman_royalguard = {
             intro = [[Guardian of order. Can be hired as a bodyguard using a [securitycontract].]]
         },
+        tigershark = {
+            name = "Tiger Shark",
+            intro = [[Classic apex amphibious predator from Shipwrecked.
+                    ----------------
+                    During monsoon season, it nests at the Tiger Shark Pool to rear [sharkitten] cubs. Features dual combat forms: underwater lunges and terrestrial body slams.
+                    World-scope respawn tracking. Defeating it drops raw fish, tiger shark skins, and feathers.]]
+        },
+        doydoy = {
+            name = "Doydoy",
+            intro = [[Endangered exotic bird native to Shipwrecked.
+                    ----------------
+                    Features genetic gender inheritance and mating mechanics. Breeding willingness increases as the population declines, but with fewer than 2 left they face extinction.
+                    Nests and lays eggs over time. Protect eggs from carnivores.]]
+        },
     },
 
     -- Items
     items = {
         ship = {
-            name = "Ship (Single-player)",
-            intro =
-            [[Unlocked via the [SEAFARING_PROTOTYPER] instead of the [RESEARCHLAB2]. The core tool for solo navigation.]]
+            name = "Solo Boats",
+            intro = [[Personal vessels rebuilt from the ground up for DST.
+                    Place a boat on water and board directly; containers and equipment are managed via the boat container.
+                    ----------------
+                    【Dual Equipment Slots】: Stern slot supports sails, propellers, and [trawlnet]; bow slot supports [boatlantern], [boatcannon], and the [quackeringram].
+                    ----------------
+                    【Durability & Repair】: Recorded in boathealth; repairable with Boat Repair Kits, Winona's Tape, Sewing Kits, and the Sea Yard.
+                    ----------------
+                    【Safety Protection】: Rebuilt sailor/sailable logic completely fixes drowning bugs during reconnects and save loading. Cleans up save data on dismount to prevent ghost boats; supports ocean boundary wrapping and [bermudatriangle] teleportation.]]
         },
         boat = {
             name = "Boat (Multiplayer)",
@@ -255,10 +360,54 @@ local WikiDesc = {
                     ----------------
                     Bumpers: [BOAT_BUMPER_KELP], [BOAT_BUMPER_SHELL], [BOAT_BUMPER_YOTD], and [BOAT_BUMPER_CRABKING] reduce impact from the installed direction by 60%, 80%, 80%, and 100% respectively.]]
         },
+        trawlnet = {
+            name = "Trawl Net",
+            intro = [[Stern slot equipment for solo boats. Scans behind the boat during travel and gathers targets into net storage.
+                    ----------------
+                    【Diverse Catches】: Gathers floating items, ocean fish, fish shoals, lobsters, jellyfish, rainbow jellyfish, seaweed stalks, bull kelp roots, and trawlable objects.
+                    ----------------
+                    【Capacity & Balance】: Catches 1 item per scan cycle with a brief cooldown. Fullness applies up to a 20% speed penalty. Automatically drops as a floating [trawlnetdropped] container at 9 items. World migration and unequip safeguards.]]
+        },
         smelter = {
             name = "Smelter",
             intro = [[An advanced facility for smelting [iron], [goldnugget], or refining ores.
                     Smelting recipes can be viewed through the [Smart Cooking] mod.]]
+        },
+        quackeringram = {
+            name = "Quacken Ram",
+            intro = [[Bow ramming equipment for solo boats, crafted from a Quacken beak and gears.
+                    ----------------
+                    Ramming waves or hostile creatures inflicts massive damage and knockback, granting the pilot a momentary speed boost. Consumes durability per hit.]]
+        },
+        boatcannon = {
+            name = "Boat Cannon",
+            intro = [[Bow-mounted naval ordnance for solo boats.
+                    ----------------
+                    Right-click to aim and fire cannonballs across water at foes for area explosive damage. Also features an obsidian cannon variant with incendiary blasts.]]
+        },
+        boatlantern = {
+            name = "Boat Lantern",
+            intro = [[Bow lighting equipment for solo boats.
+                    ----------------
+                    Provides mobile illumination during night and cave navigation, freeing up hand slots. Can be refueled. Also includes a basic [boattorch] variant.]]
+        },
+        sail = {
+            name = "Sails",
+            intro = [[Stern propulsion equipment for solo boats.
+                    ----------------
+                    Includes Thatch Sail, Cloth Sail, Snakeskin Sail, Feather Sail, and the [ironwind] propeller. Significantly boosts sailing speed and tailwind acceleration.]]
+        },
+        key_to_city = {
+            name = "Key to the City",
+            intro = [[Hamlet urban planning badge obtained from the Palace display cases.
+                    ----------------
+                    Grants mayoral construction privileges, allowing players to build pig town shops, houses, lampposts, and guard watchtowers outdoors.]]
+        },
+        city_hammer = {
+            name = "City Hammer",
+            intro = [[Municipal demolition tool paired with the Key to the City.
+                    ----------------
+                    Used to safely dismantle player-built town structures and reclaim construction materials.]]
         },
     },
 }

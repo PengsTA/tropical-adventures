@@ -352,8 +352,8 @@ local function MakeHat(name, bankparam, prefabnameparam)
         inst.components.fueled:InitializeFuelLevel(48 * 30)
         inst.components.fueled:SetDepletedFn(generic_perish)
 
-        --		inst:AddComponent("windproofer")
-        --		inst.components.windproofer:SetEffectiveness(TUNING.WINDPROOFNESS_MED)
+        inst:AddComponent("windproofer")
+        inst.components.windproofer:SetEffectiveness(TUNING.WINDPROOFNESS_MED or 0.5)
 
         return inst
     end

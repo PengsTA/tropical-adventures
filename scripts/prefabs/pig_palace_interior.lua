@@ -1,5 +1,10 @@
 require "prefabutil"
 
+local InteriorLayoutBuilder = require "tools/interior_layout_builder"
+local InteriorRoomBuilder = require "tools/interior_room_builder"
+local RoomExtensions = require "tools/interior_room_extensions"
+local ROOM_LAYOUTS = require "datadefs/interior"
+
 local assets =
 {
 	Asset("ANIM", "anim/pisohamlet.zip"),
@@ -10,64 +15,49 @@ local assets =
 	Asset("ANIM", "anim/interior_wall_decals_palace.zip"),
 }
 
-local BASEMENT_SHADE = 0.5
-local TAMANHODOMAPA = 1
+local prefabs = {}
+local PALACE_LAYOUT = ROOM_LAYOUTS.palace
+local ROOM_SIZES = ROOM_LAYOUTS.sizes
+local PALACE_ROOM_ORDER = {
+    PALACE_LAYOUT.rooms.main,
+    PALACE_LAYOUT.rooms.gallery,
+    PALACE_LAYOUT.rooms.upper,
+}
+
+local ROOM_DIRECTIONS = {
+	back = 1,
+	front = 2,
+	left = 3,
+	right = 4,
+}
+
+local ROOM_DIRECTION_NAMES = {
+	[1] = "back",
+	[2] = "front",
+	[3] = "left",
+	[4] = "right",
+}
 
 local function OnSave(inst, data)
+	-- Keep the old save key so existing worlds can still recognize the room.
 	data.entrada = inst.entrada
+	data.interior_built = inst.interior_built
 end
-
 
 local function OnLoad(inst, data)
-	if data == nil then return end
-	if data.entrada then inst.entrada = data.entrada end
+	if data ~= nil and (data.interior_built or data.entrada) then
+		inst.interior_built = true
+		inst.entrada = data.entrada or 1
+	end
 end
 
-local function OnActivateByOther(inst, source, doer)
-	--	if not inst.sg:HasStateTag("open") then
-	--		inst.sg:GoToState("opening")
-	--	end
+local function BuilderOnActivateByOther(inst, source, doer)
 	if doer ~= nil and doer.Physics ~= nil then
 		doer.Physics:CollidesWith(COLLISION.WORLD)
 	end
 end
 
-local function ExitOnActivateByOther(inst, other, doer)
-	if doer ~= nil
-		and doer.sg ~= nil and not doer:HasTag("playerghost") then
-		doer.sg.statemem.teleportarrivestate = "idle"
-	end
-end
-
-local function PlayTravelSound(inst, doer)
-	inst.SoundEmitter:PlaySound("dontstarve/cave/rope_down")
-end
-
-local function ReceiveItem(teleporter, item)
-	if item.Transform ~= nil then
-		local x, y, z = teleporter.inst.Transform:GetWorldPosition()
-		local angle = math.random() * 2 * PI
-
-		if item.Physics ~= nil then
-			item.Physics:Stop()
-			if teleporter.inst:IsAsleep() then
-				local radius = teleporter.inst:GetPhysicsRadius(0) + math.random()
-				item.Physics:Teleport(x + math.cos(angle) * radius, 0, z - math.sin(angle) * radius)
-			else
-				TemporarilyRemovePhysics(item, 1)
-				local speed = 2 + math.random() * .5 + teleporter.inst:GetPhysicsRadius(0)
-				item.Physics:Teleport(x, 4, z)
-				item.Physics:SetVel(speed * math.cos(angle), -1, speed * math.sin(angle))
-			end
-		else
-			local radius = 2 + math.random()
-			item.Transform:SetPosition(x + math.cos(angle) * radius, 0, z - math.sin(angle) * radius)
-		end
-	end
-end
-
-
-local function OnActivate(inst, doer)
+local function BuilderOnActivate(inst, doer)
 	if doer:HasTag("player") then
 		if doer.components.talker ~= nil then
 			doer.components.talker:ShutUp()
@@ -77,14 +67,97 @@ local function OnActivate(inst, doer)
 	end
 end
 
-
-local function OnAccept(inst, giver, item)
+local function BuilderOnAccept(inst, giver, item)
 	inst.components.inventory:DropItem(item)
 	inst.components.teleporter:Activate(item)
 end
 
-local function IsNearBasement(x, y, z)
-	return #TheSim:FindEntities(x, 0, z, 100, { "alt_tile" }) > 0
+local function LinkTeleporters(from, to, bidirectional)
+	if from ~= nil and from.components.teleporter ~= nil then
+		from.components.teleporter.targetTeleporter = to
+	end
+	if bidirectional ~= false and to ~= nil and to.components.teleporter ~= nil then
+		to.components.teleporter.targetTeleporter = from
+	end
+end
+
+local function BuildPalaceRoom(builder, room, room_def, doors)
+	local size = ROOM_SIZES[room_def.kind]
+	local shell = InteriorRoomBuilder.BuildShell(room, size)
+	local layout = PALACE_LAYOUT.layouts[room_def.layout]
+	assert(layout ~= nil, "missing palace room layout: " .. tostring(room_def.layout))
+
+	builder.Transform:SetPosition(room.x, 0, room.z)
+	local context = InteriorLayoutBuilder.SpawnFixtures(room, layout, { root = builder })
+	for key, door in pairs(context.by_key) do
+		doors[key] = door
+	end
+
+	InteriorRoomBuilder.FitContents(shell, { builder })
+
+	return shell
+end
+
+local function LinkPalaceRooms(builder, rooms, doors)
+	builder:DoTaskInTime(1, function(inst)
+		local exterior = SpawnPrefab(PALACE_LAYOUT.exterior_prefab)
+		if exterior ~= nil then
+			local x, y, z = inst.Transform:GetWorldPosition()
+			exterior.Transform:SetPosition(x, y, z)
+			LinkTeleporters(exterior, doors.exit)
+			LinkTeleporters(doors.upper_to_exit, exterior, false)
+		end
+
+		for _, connection in ipairs(PALACE_LAYOUT.connections) do
+			if connection.to ~= "exterior" then
+				local source_door = doors[connection.from]
+				local target_door = doors[connection.to]
+				local source_room = rooms[connection.from_room]
+				local target_room = rooms[connection.to_room]
+				local direction = RoomExtensions.GetWallDirection(source_door, false)
+				if source_room == nil
+					or target_room == nil
+					or not RoomExtensions.LinkRoomDoors(
+						source_door,
+						source_room.id,
+						direction,
+						target_door,
+						target_room.id
+					) then
+					-- Preserve the original teleport route if a layout definition is
+					-- incomplete, even though it will not be added to the room map.
+					LinkTeleporters(source_door, target_door)
+				end
+			end
+		end
+
+		inst:Remove()
+	end)
+end
+
+local function BuildPalaceInterior(inst)
+	local manager = TheWorld.components.interior_manager
+	if manager == nil then
+		return
+	end
+
+	local rooms = {}
+	local doors = {}
+	local palace_id = nil
+	for _, room_def in ipairs(PALACE_ROOM_ORDER) do
+		local room = manager:Allocate(nil, room_def.kind)
+		palace_id = palace_id or room.id
+		room.house_id = palace_id
+		room.room_template = room_def.kind
+		room.camera_profile_kind = room_def.kind
+		room.map_x = room_def.map_x or 0
+		room.map_z = room_def.map_z or 0
+		rooms[room_def.key] = room
+		BuildPalaceRoom(inst, room, room_def, doors)
+	end
+
+	inst.exit = doors.exit
+	LinkPalaceRooms(inst, rooms, doors)
 end
 
 local function entrance()
@@ -96,21 +169,16 @@ local function entrance()
 	inst.entity:AddNetwork()
 	inst.entity:AddMiniMapEntity()
 
-	--    inst.AnimState:SetBuild("palace")
-	--    inst.AnimState:SetBank("palace")
-	--    inst.AnimState:PlayAnimation("idle", true)
 	inst.AnimState:SetOrientation(ANIM_ORIENTATION.OnGround)
 	inst.AnimState:SetLayer(LAYER_BACKGROUND)
 	inst.AnimState:SetSortOrder(1)
 	inst.AnimState:SetFinalOffset(2)
 
 	inst.Transform:SetEightFaced()
-
 	inst.MiniMapEntity:SetIcon("minimap_volcano_entrance.tex")
 
 	inst:AddTag("vulcano_part")
 	inst:AddTag("antlion_sinkhole_blocker")
-
 	inst:SetDeployExtraSpacing(2.5)
 
 	inst.entity:SetPristine()
@@ -119,13 +187,11 @@ local function entrance()
 		return inst
 	end
 
-
 	inst:AddComponent("inspectable")
-	--    inst.components.inspectable.getstatus = GetStatus
 
 	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
+	inst.components.teleporter.onActivate = BuilderOnActivate
+	inst.components.teleporter.onActivateByOther = BuilderOnActivateByOther
 	inst.components.teleporter.offset = 0
 	inst.components.teleporter.travelcameratime = 0.2
 	inst.components.teleporter.travelarrivetime = 0.1
@@ -134,1236 +200,12 @@ local function entrance()
 
 	inst:AddComponent("trader")
 	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = OnAccept
+	inst.components.trader.onaccept = BuilderOnAccept
 	inst.components.trader.deleteitemonaccept = false
 
-
-	--		if inst.components.teleporter.targetTeleporter ~= nil then
-	--		inst:RemoveEventCallback("onbuilt", OnBuilt)
-	--		return
-	--	end
-	if inst.entrada == nil then
-		local x = 0
-		local y = 0
-		local z = 0
-		if TheWorld.components.contador then TheWorld.components.contador:Increment(1) end
-		local numerounico = TheWorld.components.contador.count
-
-		x = TheWorld.components.contador:GetX()
-		y = 0
-		z = TheWorld.components.contador:GetZ()
-		-------------aqui é a porta de entrada-----------------------------------	
-		inst.exit = SpawnPrefab("palace_door_saida")
-		inst.exit.Transform:SetPosition(x + 9.5, 0, z + 0.5)
-
-
-		---------------------------cria a parede inicio------------------------------------------------------------------	
-		local tipodemuro = "wall_invisible"
-		---------------------------cria a parede inicio -------------------------------------
-		---------------------------cria a parede inicio------------------------------------------------------------------	
-		local y = 0
-
-		x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
-		inst.Transform:SetPosition(x, 0, z)
-
-		local POS = {}
-		for x = -9, 10 do
-			for z = -13.5, 13.5 do
-				if x == -9 or x == 10 or z == -13.5 or z == 13.5 then
-					table.insert(POS, { x = x, z = z })
-				end
-			end
-		end
-
-
-		local count = 0
-		for _, v in pairs(POS) do
-			count = count + 1
-			local part = SpawnPrefab(tipodemuro)
-			part.Transform:SetPosition(x + v.x, 0, z + v.z)
-		end
-
-
-
-		local tipo = "principal" -- gallery ou giftshop 	
-		if tipo == "principal" then
-			-----------------------wall----------------------------------
-			local part = SpawnPrefab("wallpalace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 1.5, 0, z)
-				part.Transform:SetRotation(0)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			------------------------tipo de chão--------------------------------
-			local part = SpawnPrefab("pig_palace_floor")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 3.5, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			---------------------------------------------------------------------------
-
-			local part = SpawnPrefab("prop_door_shadowpalace")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 8.5, 0, z)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_roomglow_large")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 0, z)
-				part.Transform:SetRotation(0)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			--------------porta para ser trabalhada-----------------------	
-			local portaesquerdapalacio = SpawnPrefab("palace_door_west")
-			if portaesquerdapalacio ~= nil then
-				portaesquerdapalacio.Transform:SetPosition(x, 0, z - 26 / 2)
-				if portaesquerdapalacio.components.health ~= nil then
-					portaesquerdapalacio.components.health:SetPercent(1)
-				end
-			end
-			-------------------------------------------------------		
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 2, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 2, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 6 - 1)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 6 + 1)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z - 26 / 6 - 1)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z + 26 / 6 + 1)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z - 26 / 6 - 1)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z + 26 / 6 + 1)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_big_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z - 26 / 3 - 0.5)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_big_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z + 26 / 3 + 0.5)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_big_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z - 26 / 3 - 0.5)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_big_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z + 26 / 3 + 0.5)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-			local part = SpawnPrefab("deco_palace_banner_small_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 18 - 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 18 + 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 18 - 26 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 18 - 26 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14 * 3, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14 * 3, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14 * 3, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14 * 3, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14 * 5, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 14 * 5, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14 * 5, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 14 * 5, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 6, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 6, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_plant")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2 + 0.3, 0, z - 26 / 6.5)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_plant")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2 + 0.3, 0, z + 26 / 6.5)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("wall_mirror")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 3, 0, z - 26 / 2)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("wall_mirror")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 3, 0, z - 26 / 2)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_cityhall_picture1")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 3, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_cityhall_picture2")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 0.5, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_cityhall_picture1")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 3, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("pigman_queen")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_throne")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 6, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			-- floor corner pieces
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 2 + 0.5, 0, z + 26 / 2)
-				part.Transform:SetRotation(180)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 18 / 2 + 0.5, 0, z - 26 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 2)
-				part.Transform:SetRotation(0)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			-- front wall floor lights
-			local part = SpawnPrefab("swinglightobject")
-			if part ~= nil then
-                inst:AddChild(part)
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("swinglightobject")
-			if part ~= nil then
-                inst:AddChild(part)
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			-- back wall lights and floor lights
-			local part = SpawnPrefab("window_round_light_backwall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_palace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z - 26 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_round_light_backwall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_palace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_round_light_backwall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_palace_stainglass")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			-- aisle rug			
-			local part = SpawnPrefab("rug_palace_runner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 3.38, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_runner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 3.38 * 2, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_runner")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_runner")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 3.38, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_runner")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 3.38 * 2, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			----------------------------------segundo pavimento do palacio-------------------------------------------------------
-			local x = 0
-			local y = 0
-			local z = 0
-			if TheWorld.components.contador then TheWorld.components.contador:Increment(1) end
-			local numerounico = TheWorld.components.contador.count
-
-			x = TheWorld.components.contador:GetX()
-			y = 0
-			z = TheWorld.components.contador:GetZ()
-
-
-			---------------------------cria a parede inicio------------------------------------------------------------------	
-			local tipodemuro = "wall_invisible"
-			---------------------------parade dos aposento------------------------------------------------------------------	
-			local y = 0
-
-			x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
-			inst.Transform:SetPosition(x, 0, z)
-
-			local POS = {}
-			for x = -7, 7 do
-				for z = -9.5, 9.5 do
-					if x == -7 or x == 7 or z == -9.5 or z == 9.5 then
-						table.insert(POS, { x = x, z = z })
-					end
-				end
-			end
-
-
-			local count = 0
-			for _, v in pairs(POS) do
-				count = count + 1
-				local part = SpawnPrefab(tipodemuro)
-				part.Transform:SetPosition(x + v.x, 0, z + v.z)
-			end
-
-
-
-			----------------parede---------------------------------------------
-			local part = SpawnPrefab("wallgallery")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 2, 0, z)
-				part.Transform:SetRotation(180)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			------------------------tipo de chão--------------------------------
-			local part = SpawnPrefab("pig_palace_gallery_floor") --"pig_palace_floor"
-			if part ~= nil then
-				part.Transform:SetPosition(x - 2.9, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			--------------------------------------------------------------------------------------
-			local part = SpawnPrefab("deco_roomglow")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local portaesquerdagaleria = SpawnPrefab("gallery_door_west")
-			if portaesquerdagaleria ~= nil then
-				portaesquerdagaleria.Transform:SetPosition(x, 0, z - 9)
-				if portaesquerdagaleria.components.health ~= nil then
-					portaesquerdagaleria.components.health:SetPercent(1)
-				end
-			end
-
-
-			local portadireitagaleria = SpawnPrefab("gallery_door_east")
-			if portadireitagaleria ~= nil then
-				portadireitagaleria.Transform:SetPosition(x, 0, z + 9)
-				if portadireitagaleria.components.health ~= nil then
-					portadireitagaleria.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 6.5, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 6.5, 0, z + 18 / 2)
-				part.Transform:SetRotation(180)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 6.5, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 6.5, 0, z - 18 / 2)
-				part.Transform:SetRotation(0)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_round_light_backwall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z - 18 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_palace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z - 18 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_round_light_backwall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 18 / 2, 0, z + 26 / 3)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("window_palace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z + 18 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 2, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall_corner_front")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 2, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 6, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 6, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 6, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_tall")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 6, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("swinging_light_floral_bloomer")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 3, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-			local part = SpawnPrefab("pigman_banker_shopkeep")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 3, 0, z)
-				part.sg:GoToState("desk_pre")
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-			local part = SpawnPrefab("shop_buyer")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 1, 0, z - 6)
-				part.Transform:SetRotation(90)
-				part.startAnim = "idle_marble_dome"
-				part.AnimState:PlayAnimation("idle_marble_dome")
-				part.saleitem = { "city_hammer", "pedestal_key", 1 }
-			end
-
-
-			local part = SpawnPrefab("shop_buyer")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 3, 0, z)
-				-- part.Transform:SetRotation(90)
-				part.startAnim = "idle_marble_dome"
-				part.AnimState:PlayAnimation("idle_marble_dome")
-				part.saleitem = { "key_to_city", "pedestal_key", 1 }
-			end
-
-			local part = SpawnPrefab("shop_buyer")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 1, 0, z + 6)
-				part.Transform:SetRotation(-90)
-				part.startAnim = "idle_marble_dome"
-				part.AnimState:PlayAnimation("idle_marble_dome")
-				part.saleitem = { "trinket_giftshop_4", "pedestal_key", 1 }
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewal")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 14 * 3, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewal")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 14 * 3, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewal")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 14 * 3, 0, z - 18 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_banner_small_sidewal")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 12 / 14 * 3, 0, z + 18 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_marble2")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 12 / 2, 0, z)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			portaesquerdapalacio.components.teleporter.targetTeleporter = portadireitagaleria
-			portadireitagaleria.components.teleporter.targetTeleporter = portaesquerdapalacio
-
-			------------------------------------parte 3----------------------------------
-			local x = 0
-			local y = 0
-			local z = 0
-			if TheWorld.components.contador then TheWorld.components.contador:Increment(1) end
-			local numerounico = TheWorld.components.contador.count
-
-			x = TheWorld.components.contador:GetX()
-			y = 0
-			z = TheWorld.components.contador:GetZ()
-
-			---------------------------cria a parede inicio------------------------------------------------------------------	
-			local tipodemuro = "wall_invisible"
-			---------------------------parade dos aposento------------------------------------------------------------------	
-			local y = 0
-
-			x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
-			inst.Transform:SetPosition(x, 0, z)
-
-			local POS = {}
-			for x = -7, 6 do
-				for z = -8.5, 8.5 do
-					if x == -7 or x == 6 or z == -8.5 or z == 8.5 then
-						table.insert(POS, { x = x, z = z })
-					end
-				end
-			end
-
-
-			local count = 0
-			for _, v in pairs(POS) do
-				count = count + 1
-				local part = SpawnPrefab(tipodemuro)
-				part.Transform:SetPosition(x + v.x, 0, z + v.z)
-			end
-
-			-----------------------wall----------------------------------
-			local part = SpawnPrefab("wallshop")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 1.8, 0, z)
-				part.Transform:SetRotation(180)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			------------------------tipo de chão--------------------------------
-			local part = SpawnPrefab("pig_palace_shop_floor") --"pig_palace_floor"
-			if part ~= nil then
-				part.Transform:SetPosition(x - 2.2, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-			--------------------------------------------------------------------
-
-
-			local part = SpawnPrefab("deco_roomglow")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 0, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-
-			local portasulgiftshop = SpawnPrefab("giftshop_door_south")
-			if portasulgiftshop ~= nil then
-				portasulgiftshop.Transform:SetPosition(x + 10 / 2, 0, z)
-				if portasulgiftshop.components.health ~= nil then
-					portasulgiftshop.components.health:SetPercent(1)
-				end
-			end
-
-			local portadireitagiftshop = SpawnPrefab("giftshop_door_east")
-			if portadireitagiftshop ~= nil then
-				portadireitagiftshop.Transform:SetPosition(x, 0, z + 15 / 2)
-				if portadireitagiftshop.components.health ~= nil then
-					portadireitagiftshop.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 5.5, 0, z + 15 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 5.5, 0, z + 15 / 2)
-				part.Transform:SetRotation(180)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 5.5, 0, z - 15 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("rug_palace_corners")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 5.5, 0, z - 15 / 2)
-				part.Transform:SetRotation(0)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_short_corner_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z - 15 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_short_corner_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z + 15 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_short_corner_front_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 10 / 2, 0, z - 15 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_palace_beam_room_short_corner_front_lights")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 10 / 2, 0, z + 15 / 2)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-			local part = SpawnPrefab("deco_cityhall_picture2")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z - 15 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("deco_cityhall_picture1")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z - 15 / 2)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_woodpalace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z - 15 / 5)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_woodpalace")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 2, 0, z + 15 / 5)
-				part.Transform:SetRotation(-90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("swinging_light_floral_bloomer")
-			if part ~= nil then
-				part.Transform:SetPosition(x, 3, z)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_displaycase")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 5, 0, z - 15 / 3)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_displaycase")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 10 / 5, 0, z + 15 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_displaycase")
-			if part ~= nil then
-				part.Transform:SetPosition(x + 10 / 5, 0, z - 15 / 3)
-				part.Transform:SetRotation(270)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-			local part = SpawnPrefab("shelves_displaycase")
-			if part ~= nil then
-				part.Transform:SetPosition(x - 10 / 5, 0, z + 15 / 3)
-				part.Transform:SetRotation(90)
-				if part.components.health ~= nil then
-					part.components.health:SetPercent(1)
-				end
-			end
-
-
-
-			inst:DoTaskInTime(1, function(inst)
-				local portaentrada = SpawnPrefab("pig_palace")
-				local a, b, c = inst.Transform:GetWorldPosition()
-				portaentrada.Transform:SetPosition(a, b, c)
-				portaentrada.components.teleporter.targetTeleporter = inst.exit
-				inst.exit.components.teleporter.targetTeleporter = portaentrada
-
-				portaesquerdapalacio.components.teleporter.targetTeleporter = portadireitagaleria
-				portadireitagaleria.components.teleporter.targetTeleporter = portaesquerdapalacio
-
-				portaesquerdagaleria.components.teleporter.targetTeleporter = portadireitagiftshop
-				portadireitagiftshop.components.teleporter.targetTeleporter = portaesquerdagaleria
-
-				portasulgiftshop.components.teleporter.targetTeleporter = portaentrada
-
-				inst:Remove()
-			end)
-		end
-
-
-
-
-
-		--------------------------------------------cria o piso e itens fim -------------------------------------------------------		
-
+	if not inst.interior_built and inst.entrada == nil then
+		BuildPalaceInterior(inst)
+		inst.interior_built = true
 		inst.entrada = 1
 	end
 
@@ -1373,7 +215,6 @@ local function entrance()
 	return inst
 end
 
----------------------------------pisos---------------------------------------------------------------------------
 local function SpawnPiso1(inst)
 	local inst = CreateEntity()
 	inst.entity:AddTransform()
@@ -1397,7 +238,6 @@ local function SpawnPiso1(inst)
 
 	return inst
 end
-
 
 local function SpawnPiso2(inst)
 	local inst = CreateEntity()
@@ -1447,7 +287,6 @@ local function SpawnPiso3(inst)
 	return inst
 end
 
-
 local function wall_common1(build)
 	local inst = CreateEntity()
 	inst.entity:AddTransform()
@@ -1456,7 +295,6 @@ local function wall_common1(build)
 	inst.AnimState:SetBank("wallhamletpig")
 	inst.AnimState:SetBuild("wallhamletpig")
 	inst.AnimState:PlayAnimation("wall_royal_high", true)
-	--	inst.AnimState:PlayAnimation("wall_royal_high",true)
 	inst.AnimState:SetLayer(LAYER_BACKGROUND)
 	inst.AnimState:SetSortOrder(7)
 	inst.AnimState:SetScale(4.3, 4.8, 4.8)
@@ -1490,32 +328,10 @@ local function wall_common3(build)
 	return inst
 end
 
-----------------------------------------------------------entrada-----------------------------------------------------------------------------
-local function OnDoneTeleporting(inst, obj)
-	if obj and obj:HasTag("player") then
-
-	end
+local function DoorOnDoneTeleporting(inst, obj)
 end
 
-local function OnDoneTeleportinggallery(inst, obj)
-	if obj and obj:HasTag("player") then
-
-	end
-end
-
-local function OnDoneTeleportinggalleryesquerda(inst, obj)
-	if obj and obj:HasTag("player") then
-
-	end
-end
-
-local function OnDoneTeleportingshop(inst, obj)
-	if obj and obj:HasTag("player") then
-
-	end
-end
-
-local function OnActivate(inst, doer)
+local function DoorOnActivate(inst, doer)
 	if doer:HasTag("player") then
 		ProfileStatsSet("wormhole_used", true)
 
@@ -1527,368 +343,191 @@ local function OnActivate(inst, doer)
 		if doer.components.talker ~= nil then
 			doer.components.talker:ShutUp()
 		end
-
-		--Sounds are triggered in player's stategraph
-	elseif inst.SoundEmitter ~= nil then
-
 	end
 end
 
-local function OnActivateByOther(inst, source, doer)
-	--    if not inst.sg:HasStateTag("open") then
-	--        inst.sg:GoToState("opening")
-	--    end
+local function DoorOnActivateByOther(inst, source, doer)
 end
 
-local function onaccept(inst, giver, item)
+local function DoorOnAccept(inst, giver, item)
 	inst.components.inventory:DropItem(item)
 	inst.components.teleporter:Activate(item)
 end
 
 local function StartTravelSound(inst, doer)
-
 end
 
 local function OnHaunt(inst, haunter)
 	inst.components.teleporter:Activate(haunter)
 end
 
-local function fnescada()
-	local inst = CreateEntity()
-
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
-
-	local minimap = inst.entity:AddMiniMapEntity()
-	minimap:SetIcon("vamp_bat_cave.tex")
-
-	inst.AnimState:SetBank("palace_door")
-	inst.AnimState:SetBuild("palace_door")
-	inst.AnimState:PlayAnimation("south")
-
-	inst:AddTag("trader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("alltrader")
-	inst:AddTag("guard_entrance")
-	inst:AddTag("antlion_sinkhole_blocker")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
+local function AddDoorComponents(inst, definition)
+	if definition.save then
+		inst.OnSave = OnSave
+		inst.OnLoad = OnLoad
 	end
 
 	inst:AddComponent("trader")
 	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
+	inst.components.trader.onaccept = DoorOnAccept
 	inst.components.trader.deleteitemonaccept = false
 
 	inst:AddComponent("inspectable")
 	inst.components.inspectable:RecordViews()
 
 	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
+	inst.components.teleporter.onActivate = DoorOnActivate
+	inst.components.teleporter.onActivateByOther = DoorOnActivateByOther
 	inst.components.teleporter.offset = 0
-	inst.components.teleporter.hamlet = true
+	if definition.hamlet then
+		inst.components.teleporter.hamlet = true
+	end
 	inst.components.teleporter.travelcameratime = 0.2
 	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleporting)
+	inst:ListenForEvent("starttravelsound", StartTravelSound)
+	inst:ListenForEvent("doneteleporting", definition.on_done or DoorOnDoneTeleporting)
 
 	inst:AddComponent("inventory")
-	inst:AddComponent("hauntable")
-	inst.components.hauntable:SetOnHauntFn(OnHaunt)
-
-	return inst
+	if definition.hauntable then
+		inst:AddComponent("hauntable")
+		inst.components.hauntable:SetOnHauntFn(OnHaunt)
+	end
 end
 
-local function fnpalaceesquerda()
-	local inst = CreateEntity()
-
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
-
-	local minimap = inst.entity:AddMiniMapEntity()
-
-	inst.AnimState:SetBank("wall_decals_palace")
-	inst.AnimState:SetBuild("interior_wall_decals_palace")
-	inst.AnimState:PlayAnimation("door_sidewall")
-	inst.Transform:SetRotation(270)
-	inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-	--    inst.AnimState:SetSortOrder(3)	
-	inst.dooranimclosed = nil
-	inst.timechanger = nil
-
-	inst:AddTag("trader")
-	inst:AddTag("alltrader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("lockable_door")
-	inst:AddTag("door_east")
-	inst:AddTag("antlion_sinkhole_blocker")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
-	end
-
-	inst:AddComponent("trader")
-	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
-	inst.components.trader.deleteitemonaccept = false
-
-	inst:AddComponent("inspectable")
-	inst.components.inspectable:RecordViews()
-
-	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
-	inst.components.teleporter.offset = 0
-	inst.components.teleporter.travelcameratime = 0.2
-	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleporting)
-
-	inst.OnSave = OnSave
-	inst.OnLoad = OnLoad
-
-	inst:AddComponent("inventory")
-
-	return inst
+local function GetRoomDirection(inst)
+	return inst.room_direction or ROOM_DIRECTION_NAMES[inst._ta_room_direction:value()]
 end
 
-local function fngaleriaesquerda()
-	local inst = CreateEntity()
-
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
-
-	local minimap = inst.entity:AddMiniMapEntity()
-
-	inst.AnimState:SetBank("wall_decals_palace")
-	inst.AnimState:SetBuild("interior_wall_decals_palace")
-	inst.AnimState:PlayAnimation("door_sidewall")
-	--    inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-	--    inst.AnimState:SetSortOrder(3)
-	inst.Transform:SetRotation(270)
-	inst.dooranimclosed = nil
-	inst.timechanger = nil
-
-	inst:AddTag("trader")
-	inst:AddTag("alltrader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("lockable_door")
-	inst:AddTag("door_west")
-	inst:AddTag("antlion_sinkhole_blocker")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
+local function SetRoomDirection(inst, direction)
+	direction = RoomExtensions.NormalizeDirection(direction)
+	local direction_id = ROOM_DIRECTIONS[direction]
+	if direction_id == nil then
+		return false
 	end
 
-	inst:AddComponent("trader")
-	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
-	inst.components.trader.deleteitemonaccept = false
-
-	inst:AddComponent("inspectable")
-	inst.components.inspectable:RecordViews()
-
-	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
-	inst.components.teleporter.offset = 0
-	inst.components.teleporter.travelcameratime = 0.2
-	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleportinggallery)
-
-	inst.OnSave = OnSave
-	inst.OnLoad = OnLoad
-
-	inst:AddComponent("inventory")
-
-	return inst
+	inst.room_direction = direction
+	inst._ta_room_direction:set(direction_id)
+	for label, _ in pairs(ROOM_DIRECTIONS) do
+		inst:RemoveTag("interior_" .. label .. "_door")
+	end
+	inst:AddTag("interior_" .. direction .. "_door")
+	return true
 end
 
-local function fngaleriadireita()
-	local inst = CreateEntity()
-
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
-
-	local minimap = inst.entity:AddMiniMapEntity()
-
-	inst.AnimState:SetBank("wall_decals_palace")
-	inst.AnimState:SetBuild("interior_wall_decals_palace")
-	inst.AnimState:PlayAnimation("door_sidewall")
-	--    inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-	--    inst.AnimState:SetSortOrder(3)
-	inst.Transform:SetTwoFaced()
-	inst.Transform:SetRotation(180)
-	inst.dooranimclosed = nil
-	inst.timechanger = nil
-
-	inst:AddTag("trader")
-	inst:AddTag("alltrader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("lockable_door")
-	inst:AddTag("door_east")
-	inst:AddTag("antlion_sinkhole_blocker")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
+local function ConfigureRoomLink(inst)
+	function inst:Link(target, target_room_id)
+		self.components.teleporter.targetTeleporter = target
+		self.target_door = target
+		self.target_room_id = target_room_id
+		self._ta_target_door:set(target)
 	end
 
-	inst:AddComponent("trader")
-	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
-	inst.components.trader.deleteitemonaccept = false
+	inst.SetRoomDirection = SetRoomDirection
 
-	inst:AddComponent("inspectable")
-	inst.components.inspectable:RecordViews()
+	local old_on_save = inst.OnSave
+	inst.OnSave = function(door, data)
+		if old_on_save ~= nil then
+			old_on_save(door, data)
+		end
+		data.ta_target_door = door.target_door ~= nil and door.target_door.GUID or nil
+		data.ta_target_room_id = door.target_room_id
+		data.ta_room_direction = door.room_direction
+	end
 
-	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
-	inst.components.teleporter.offset = 0
-	inst.components.teleporter.travelcameratime = 0.2
-	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleportinggallery)
-
-	inst.OnSave = OnSave
-	inst.OnLoad = OnLoad
-
-	inst:AddComponent("inventory")
-
-	return inst
+	local old_load_post_pass = inst.LoadPostPass
+	inst.LoadPostPass = function(door, ents, data)
+		if old_load_post_pass ~= nil then
+			old_load_post_pass(door, ents, data)
+		end
+		if data ~= nil and data.ta_target_door ~= nil and ents[data.ta_target_door] ~= nil then
+			local target = ents[data.ta_target_door].entity
+			if target ~= nil then
+				door:Link(target, data.ta_target_room_id)
+			end
+		end
+		if data ~= nil and data.ta_room_direction ~= nil then
+			door:SetRoomDirection(data.ta_room_direction)
+		end
+	end
 end
 
-local function fnshopsul()
-	local inst = CreateEntity()
-
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
-
-	local minimap = inst.entity:AddMiniMapEntity()
-
-	inst.AnimState:SetBank("pig_shop_doormats")
-	inst.AnimState:SetBuild("pig_shop_doormats")
-	inst.AnimState:PlayAnimation("idle_giftshop")
-	inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-	--    inst.AnimState:SetSortOrder(3)
-	inst.Transform:SetRotation(-90)
-	inst.dooranimclosed = nil
-	inst.timechanger = nil
-
-	inst:AddTag("trader")
-	inst:AddTag("alltrader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("guard_entrance")
-	inst:AddTag("antlion_sinkhole_blocker")
-
-	inst.entity:SetPristine()
-
-	if not TheWorld.ismastersim then
-		return inst
+local function RestoreRoomLink(inst)
+	local target = inst.components.teleporter.targetTeleporter
+	if target == nil or not target:IsValid() then
+		return
 	end
 
-	inst:AddComponent("trader")
-	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
-	inst.components.trader.deleteitemonaccept = false
+	local source_room = RoomExtensions.GetRoomForEntity(inst)
+	local target_room = RoomExtensions.GetRoomForEntity(target)
+	if source_room == nil
+		or target_room == nil
+		or source_room == target_room
+		or source_room._ta_room_id == nil
+		or target_room._ta_room_id == nil then
+		return
+	end
 
-	inst:AddComponent("inspectable")
-	inst.components.inspectable:RecordViews()
-
-	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
-	inst.components.teleporter.offset = 0
-	inst.components.teleporter.travelcameratime = 0.2
-	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleportingshop)
-
-	inst.OnSave = OnSave
-	inst.OnLoad = OnLoad
-
-	inst:AddComponent("inventory")
-
-	return inst
+	local direction = RoomExtensions.GetWallDirection(inst, false)
+	RoomExtensions.LinkRoomDoors(
+		inst,
+		source_room._ta_room_id:value(),
+		direction,
+		target,
+		target_room._ta_room_id:value()
+	)
 end
 
-local function fnshopdireita()
-	local inst = CreateEntity()
+local function MakePalaceDoor(definition)
+	return function()
+		local inst = CreateEntity()
 
-	inst.entity:AddTransform()
-	inst.entity:AddAnimState()
-	inst.entity:AddSoundEmitter()
-	inst.entity:AddNetwork()
+		inst.entity:AddTransform()
+		inst.entity:AddAnimState()
+		inst.entity:AddSoundEmitter()
+		inst.entity:AddNetwork()
 
-	local minimap = inst.entity:AddMiniMapEntity()
+		local minimap = inst.entity:AddMiniMapEntity()
+		if definition.minimap_icon ~= nil then
+			minimap:SetIcon(definition.minimap_icon)
+		end
 
-	inst.AnimState:SetBank("wall_decals_palace")
-	inst.AnimState:SetBuild("interior_wall_decals_palace")
-	inst.AnimState:PlayAnimation("door_sidewall")
-	--    inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
-	--    inst.AnimState:SetSortOrder(3)
-	inst.Transform:SetTwoFaced()
-	inst.Transform:SetRotation(180)
-	inst.dooranimclosed = nil
-	inst.timechanger = nil
+		inst.AnimState:SetBank(definition.bank)
+		inst.AnimState:SetBuild(definition.build)
+		inst.AnimState:PlayAnimation(definition.anim)
+		if definition.layer ~= nil then
+			inst.AnimState:SetLayer(definition.layer)
+		end
+		if definition.twofaced then
+			inst.Transform:SetTwoFaced()
+		end
+		if definition.rotation ~= nil then
+			inst.Transform:SetRotation(definition.rotation)
+		end
 
-	inst:AddTag("trader")
-	inst:AddTag("alltrader")
-	inst:AddTag("hamletteleport")
-	inst:AddTag("lockable_door")
-	inst:AddTag("door_east")
-	inst:AddTag("antlion_sinkhole_blocker")
+		for _, tag in ipairs(definition.tags) do
+			inst:AddTag(tag)
+		end
+		inst:AddTag("interior_door")
 
-	inst.entity:SetPristine()
+		-- Match the map-facing interface of player-house extension doors while
+		-- retaining the palace's own visuals and gameplay behavior.
+		inst._ta_target_door = net_entity(inst.GUID, "ta_palace_door.target")
+		inst._ta_room_direction = net_tinybyte(inst.GUID, "ta_palace_door.direction")
+		inst.GetRoomDirection = GetRoomDirection
 
-	if not TheWorld.ismastersim then
+		inst.entity:SetPristine()
+
+		if not TheWorld.ismastersim then
+			return inst
+		end
+
+		AddDoorComponents(inst, definition)
+		ConfigureRoomLink(inst)
+		-- Older palace saves retain teleporter targets but predate the map-link
+		-- fields. Rebuild those fields after component references are restored.
+		inst:DoTaskInTime(1, RestoreRoomLink)
 		return inst
 	end
-
-	inst:AddComponent("trader")
-	inst.components.trader.acceptnontradable = true
-	inst.components.trader.onaccept = onaccept
-	inst.components.trader.deleteitemonaccept = false
-
-	inst:AddComponent("inspectable")
-	inst.components.inspectable:RecordViews()
-
-	inst:AddComponent("teleporter")
-	inst.components.teleporter.onActivate = OnActivate
-	inst.components.teleporter.onActivateByOther = OnActivateByOther
-	inst.components.teleporter.offset = 0
-	inst.components.teleporter.travelcameratime = 0.2
-	inst.components.teleporter.travelarrivetime = 0.1
-	inst:ListenForEvent("starttravelsound", StartTravelSound) -- triggered by player stategraph
-	inst:ListenForEvent("doneteleporting", OnDoneTeleportinggalleryesquerda)
-
-	inst.OnSave = OnSave
-	inst.OnLoad = OnLoad
-
-	inst:AddComponent("inventory")
-
-	return inst
 end
 
 local function shadowfnsouth()
@@ -1900,15 +539,32 @@ local function shadowfnsouth()
 	inst.AnimState:SetBank("palace_door")
 	inst.AnimState:SetBuild("palace_door")
 	inst.AnimState:PlayAnimation("south_floor")
-	inst:AddTag("NOCLICK") -- Note for future self: Was commented out, but not sure why.. if it's not there, the shadow eats the click on the door.
-	inst:AddTag("NOBLOCK")
-	--	inst.initInteriorPrefab = InitInteriorPrefab_shadow
-
-	inst:AddTag("SELECT_ME")
-
 	inst.AnimState:SetLayer(LAYER_BACKGROUND)
 	inst.AnimState:SetSortOrder(3)
+
+	inst:AddTag("NOCLICK")
+	inst:AddTag("NOBLOCK")
+	inst:AddTag("SELECT_ME")
+
 	return inst
+end
+
+local DOOR_TAGS = {
+	"trader",
+	"alltrader",
+	"hamletteleport",
+	"antlion_sinkhole_blocker",
+}
+
+local function WithTags(tags, ...)
+	local result = {}
+	for _, tag in ipairs(tags) do
+		table.insert(result, tag)
+	end
+	for _, tag in ipairs({ ... }) do
+		table.insert(result, tag)
+	end
+	return result
 end
 
 return Prefab("pig_palace_entrance", entrance),
@@ -1919,11 +575,58 @@ return Prefab("pig_palace_entrance", entrance),
 	Prefab("wallshop", wall_common2, assets),
 	Prefab("wallgallery", wall_common3, assets),
 
-	Prefab("palace_door_saida", fnescada, assets),
-	Prefab("palace_door_west", fnpalaceesquerda, assets),
-	Prefab("gallery_door_west", fngaleriaesquerda, assets),
-	Prefab("gallery_door_east", fngaleriadireita, assets),
-	Prefab("giftshop_door_south", fnshopsul, assets),
-	Prefab("giftshop_door_east", fnshopdireita, assets),
+	Prefab("palace_door_saida", MakePalaceDoor({
+		bank = "palace_door",
+		build = "palace_door",
+		anim = "south",
+		minimap_icon = "vamp_bat_cave.tex",
+		tags = WithTags(DOOR_TAGS, "guard_entrance"),
+		hamlet = true,
+		hauntable = true,
+	}), assets),
+	Prefab("palace_door_west", MakePalaceDoor({
+		bank = "wall_decals_palace",
+		build = "interior_wall_decals_palace",
+		anim = "door_sidewall",
+		rotation = 270,
+		layer = LAYER_WORLD_BACKGROUND,
+		tags = WithTags(DOOR_TAGS, "lockable_door", "door_east"),
+		save = true,
+	}), assets),
+	Prefab("gallery_door_west", MakePalaceDoor({
+		bank = "wall_decals_palace",
+		build = "interior_wall_decals_palace",
+		anim = "door_sidewall",
+		rotation = 270,
+		tags = WithTags(DOOR_TAGS, "lockable_door", "door_west"),
+		save = true,
+	}), assets),
+	Prefab("gallery_door_east", MakePalaceDoor({
+		bank = "wall_decals_palace",
+		build = "interior_wall_decals_palace",
+		anim = "door_sidewall",
+		rotation = 180,
+		twofaced = true,
+		tags = WithTags(DOOR_TAGS, "lockable_door", "door_east"),
+		save = true,
+	}), assets),
+	Prefab("giftshop_door_south", MakePalaceDoor({
+		bank = "pig_shop_doormats",
+		build = "pig_shop_doormats",
+		anim = "idle_giftshop",
+		rotation = -90,
+		layer = LAYER_WORLD_BACKGROUND,
+		tags = WithTags(DOOR_TAGS, "guard_entrance"),
+		save = true,
+	}), assets),
+	Prefab("giftshop_door_east", MakePalaceDoor({
+		bank = "wall_decals_palace",
+		build = "interior_wall_decals_palace",
+		anim = "door_sidewall",
+		rotation = 180,
+		twofaced = true,
+		tags = WithTags(DOOR_TAGS, "lockable_door", "door_east"),
+		save = true,
+	}), assets),
 
 	Prefab("prop_door_shadowpalace", shadowfnsouth, assets, prefabs)

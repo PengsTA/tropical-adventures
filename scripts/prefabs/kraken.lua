@@ -10,6 +10,7 @@ local prefabs =
 	"kraken_projectile",
 	--    "kraken_inkpatch",
 	"krakenchest",
+	"sunken_boat_trinket_4",
 }
 
 SetSharedLootTable('kraken',
@@ -27,7 +28,7 @@ local MIN_HEALTH =
 	-1.0,
 }
 
-local tesouroescondido =
+local chest_treasures =
 {
 	[1] = "tfwp_healing_staff",
 	[2] = "purplegem",
@@ -282,9 +283,11 @@ local function SpawnChest(inst)
 		local chest = SpawnPrefab("krakenchest")
 		local kraken_s = SpawnPrefab("kraken_spawner")
 
+		-- Reserve a chest slot for the guaranteed Sea Worther before random rewards.
+		chest.components.container:GiveItem(SpawnPrefab("sunken_boat_trinket_4"))
 
 
-		-----pode vir até 9 moedas----------------------
+		-- Optional coins and coral share stacks in the chest.
 		for i = 1, 5 do
 			if math.random() > 0.5 then
 				local single = SpawnPrefab("dubloon")
@@ -299,10 +302,10 @@ local function SpawnChest(inst)
 			end
 		end
 
-		-----pode vir até 8 tesouros----------------------
+		-- Optional equipment and materials.
 		for i = 1, 6 do
 			if math.random() > 0.5 then
-				local single = SpawnPrefab(tesouroescondido[math.random(1, 88)])
+				local single = SpawnPrefab(chest_treasures[math.random(1, 88)])
 				chest.components.container:GiveItem(single)
 			end
 		end

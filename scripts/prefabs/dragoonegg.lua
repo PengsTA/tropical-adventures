@@ -130,6 +130,7 @@ local function DoStep(inst)
 	--	local player = ThePlayer
 	--	local distToPlayer = inst:GetPosition():Dist(player:GetPosition())
 	--	local power = Lerp(3, 1, distToPlayer/180)
+	local x, y, z = inst.Transform:GetWorldPosition()
 
 
 	inst.components.groundpounder.numRings = 2

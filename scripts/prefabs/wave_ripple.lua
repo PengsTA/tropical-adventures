@@ -13,21 +13,73 @@ local WAVE_HIT_DAMAGE = 5
 
 local ROGUEWAVE_HIT_MOISTURE = 25
 local ROGUEWAVE_HIT_DAMAGE = 10
-local ROGUEWAVE_SPEED_MULTIPLIER = 3
 local WAVE_BOOST_ANGLE_THRESHOLD = 90
-local BONUSDAONDA = 1.5
-local TEMPODOBONUS = 2
+local WAVE_BOOST_KEY = "tropical_wave_boost"
 
 
 local SPLASH_WETNESS = 9
 
+local function GetActiveBoat(player)
+    if player.components.sailor ~= nil and player.components.sailor:GetBoat() ~= nil then
+        return player.components.sailor:GetBoat()
+    end
+end
+
+local function DamageActiveBoat(player, amount)
+    local boat = GetActiveBoat(player)
+    if boat == nil then
+        return
+    end
+    if boat.components.boathealth ~= nil then
+        boat.components.boathealth:TryApplyImpact(-amount, "wave", player, .4)
+    end
+end
+
+local function GetWaveSailor(other)
+    if other == nil or not other:IsValid() or not other:HasTag("player") then
+        return nil
+    end
+
+    local sailor = other.components.sailor
+    local boat = sailor ~= nil and sailor:GetBoat() or nil
+    return boat ~= nil and boat:IsValid() and boat:HasTag("boatsw") and other or nil
+end
+
+local function GetAngleDifference(first, second)
+    local difference = math.abs(first - second) % 360
+    return difference > 180 and 360 - difference or difference
+end
+
+local function ApplyWaveBoost(player, multiplier, duration, sanity_delta)
+    local locomotor = player.components.locomotor
+    if locomotor == nil then
+        return
+    end
+
+    if player.wave_boost_task ~= nil then
+        player.wave_boost_task:Cancel()
+    end
+    locomotor:SetExternalSpeedMultiplier(player, WAVE_BOOST_KEY, multiplier)
+    player.wave_boost_task = player:DoTaskInTime(duration, function()
+        if player.components.locomotor ~= nil then
+            player.components.locomotor:RemoveExternalSpeedMultiplier(player, WAVE_BOOST_KEY)
+        end
+        player.wave_boost_task = nil
+    end)
+    if sanity_delta ~= nil and player.components.sanity ~= nil then
+        player.components.sanity:DoDelta(sanity_delta)
+    end
+end
+
 local function splash(inst)
     local wave_splash = SpawnPrefab("wave_splash")
     local pos = inst:GetPosition()
-    TintByOceanTile(wave_splash)
-    wave_splash.Transform:SetPosition(pos.x, pos.y, pos.z)
+    if wave_splash ~= nil then
+        TintByOceanTile(wave_splash)
+        wave_splash.Transform:SetPosition(pos.x, pos.y, pos.z)
+    end
 
-    local ents = TheSim:FindEntities(pos.x, pos.y, pos.z, 4)
+    local ents = TheSim:FindEntities(pos.x, pos.y, pos.z, 4, { "player" })
     for _, v in pairs(ents) do
         local moisture = v.components.moisture
         if moisture ~= nil then
@@ -46,66 +98,55 @@ end
 local function splash2(inst)
     local wave_splash = SpawnPrefab("splash_water")
     local pos = inst:GetPosition()
-    TintByOceanTile(wave_splash)
-    wave_splash.Transform:SetPosition(pos.x, pos.y, pos.z)
+    if wave_splash ~= nil then
+        TintByOceanTile(wave_splash)
+        wave_splash.Transform:SetPosition(pos.x, pos.y, pos.z)
+    end
 
     inst:Remove()
 end
 
-local function oncollidewave(inst)
-    local jogador = GetClosestInstWithTag("player", inst, 2)
-    local barril = GetClosestInstWithTag("redbarrel", inst, 2)
-    if barril then
-        barril.components.workable:WorkedBy(barril, 1)
-        splash(inst)
+local function oncollidewave(inst, other)
+    if not inst.waveactive then
+        return
     end
-    local outros = GetClosestInstWithTag("quebraonda", inst, 2)
-    if outros then splash(inst) end
+
+    local sailor = GetWaveSailor(other)
+    local barrel = GetClosestInstWithTag("redbarrel", inst, 2)
+    if barrel then
+        if barrel.components.workable ~= nil then
+            barrel.components.workable:WorkedBy(barrel, 1)
+        end
+        splash(inst)
+        return
+    end
+    local wavebreaker = GetClosestInstWithTag("quebraonda", inst, 2)
+    if wavebreaker then
+        splash(inst)
+        return
+    end
 
     local boostThreshold = WAVE_BOOST_ANGLE_THRESHOLD
 
-    if jogador then --------------------------------------------xxxxxxx
-        local moving = jogador.sg:HasStateTag("moving")
-        local playerAngle = jogador.Transform:GetRotation()
+    if sailor then
+        local moving = sailor.sg ~= nil and sailor.sg:HasStateTag("moving")
+        local playerAngle = sailor.Transform:GetRotation()
         if playerAngle < 0 then playerAngle = playerAngle + 360 end
         local waveAngle = inst.Transform:GetRotation()
         if waveAngle < 0 then waveAngle = waveAngle + 360 end
-        local angleDiff = math.abs(waveAngle - playerAngle)
-        if angleDiff > 360 then angleDiff = angleDiff - 360 end
+        local angleDiff = GetAngleDifference(waveAngle, playerAngle)
 
 
-        ----------------esta no mesmo sentido---------------------------------xxxxxx
         if angleDiff < boostThreshold and moving then
-            -------determina a velocidade-------------------------
-            if jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) and jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) == "surfboard" then
-                BONUSDAONDA = 2
-                TEMPODOBONUS = 3
-            else
-                TEMPODOBONUS = 2
-                BONUSDAONDA = 1.5
-            end
-            ------------------------------------------						
-            if jogador and jogador.components.locomotor and not jogador:HasTag("turbinado") then
-                jogador:AddTag("turbinado")
-                if jogador.prefab == "walani" then jogador.components.sanity:DoDelta(TUNING.SANITY_SUPERTINY) end
-
-                local speed = jogador.components.locomotor.runspeed
-                jogador.components.locomotor.runspeed = jogador.components.locomotor.runspeed * BONUSDAONDA
-                jogador:DoTaskInTime(TEMPODOBONUS, function()
-                    jogador:RemoveTag("turbinado")
-                    jogador.components.locomotor.runspeed = speed
-                end)
-            end
+            local boat = GetActiveBoat(sailor)
+            local surfing = boat ~= nil and (boat.prefab == "surfboard" or boat:HasTag("surfboard"))
+            ApplyWaveBoost(sailor, surfing and 2 or 1.5, surfing and 3 or 2,
+                sailor.prefab == "walani" and TUNING.SANITY_SUPERTINY or nil)
 
             inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/wave_boost")
             splash2(inst)
         else
-            if jogador then
-                local gastabarco = jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO)
-                if gastabarco then
-                    jogador.components.driver.vehicle.components.finiteuses:Use(10)
-                end
-            end
+            DamageActiveBoat(sailor, WAVE_HIT_DAMAGE)
             inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/wave_break")
             splash(inst)
         end
@@ -114,64 +155,52 @@ end
 
 
 local function oncolliderogue(inst, other)
-    local jogador = GetClosestInstWithTag("player", inst, 2)
-    local barril = GetClosestInstWithTag("redbarrel", inst, 2)
-    if barril then
-        barril.components.workable:WorkedBy(barril, 1)
+    if not inst.waveactive then
+        return
+    end
+
+    local sailor = GetWaveSailor(other)
+    local barrel = GetClosestInstWithTag("redbarrel", inst, 2)
+    if barrel then
+        if barrel.components.workable ~= nil then
+            barrel.components.workable:WorkedBy(barrel, 1)
+        end
         splash(inst)
+        return
     end
 
     local boostThreshold = WAVE_BOOST_ANGLE_THRESHOLD
 
-    if jogador then --------------------------------------------xxxxxxx
-        local moving = jogador.sg:HasStateTag("moving")
-        local playerAngle = jogador.Transform:GetRotation()
+    if sailor then
+        local moving = sailor.sg ~= nil and sailor.sg:HasStateTag("moving")
+        local playerAngle = sailor.Transform:GetRotation()
         if playerAngle < 0 then playerAngle = playerAngle + 360 end
         local waveAngle = inst.Transform:GetRotation()
         if waveAngle < 0 then waveAngle = waveAngle + 360 end
-        local angleDiff = math.abs(waveAngle - playerAngle)
-        if angleDiff > 360 then angleDiff = angleDiff - 360 end
+        local angleDiff = GetAngleDifference(waveAngle, playerAngle)
 
 
-        ----------------esta no mesmo sentido---------------------------------xxxxxx
-        if angleDiff < boostThreshold and moving and jogador and jogador.prefab == "walani" then
-            -------determina a velocidade-------------------------
-            if jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) and jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO) == "surfboard" then
-                TEMPODOBONUS = 4.5
-                BONUSDAONDA = 3
-            else
-                TEMPODOBONUS = 3
-                BONUSDAONDA = 2.25
-            end
-            ------------------------------------------						
-            if jogador and jogador.components.locomotor and not jogador:HasTag("turbinado") then
-                jogador:AddTag("turbinado")
-                if jogador.prefab == "walani" then jogador.components.sanity:DoDelta(TUNING.SANITY_SUPERTINY * 1.5) end
-
-                local speed = jogador.components.locomotor.runspeed
-                jogador.components.locomotor.runspeed = jogador.components.locomotor.runspeed * BONUSDAONDA
-                jogador:DoTaskInTime(TEMPODOBONUS, function()
-                    jogador:RemoveTag("turbinado")
-                    jogador.components.locomotor.runspeed = speed
-                end)
-            end
+        if angleDiff < boostThreshold and moving and sailor.prefab == "walani" then
+            local boat = GetActiveBoat(sailor)
+            local surfing = boat ~= nil and (boat.prefab == "surfboard" or boat:HasTag("surfboard"))
+            ApplyWaveBoost(sailor, surfing and 3 or 2.25, surfing and 4.5 or 3,
+                sailor.prefab == "walani" and TUNING.SANITY_SUPERTINY * 1.5 or nil)
 
             inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/wave_boost")
             splash2(inst)
         else
-            if jogador then
-                local gastabarco = jogador.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO)
-                if gastabarco then
-                    jogador.components.driver.vehicle.components.finiteuses:Use(20)
-                end
-            end
+            DamageActiveBoat(sailor, ROGUEWAVE_HIT_DAMAGE)
             inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/wave_break")
             splash(inst)
         end
     end
 end
 
-local function CheckGround(inst, dt)
+local function CheckGround(inst)
+    if inst.sg:HasStateTag("lowering") then
+        return
+    end
+
     --Check if I'm about to hit land
     local x, y, z = inst.Transform:GetWorldPosition()
     local vx, vy, vz = inst.Physics:GetVelocity()
@@ -190,36 +219,19 @@ local function CheckGround(inst, dt)
             end
         end
         splash(inst)
+        return
     end
 
 
     local ground = TheWorld.Map:GetTile(TheWorld.Map:GetTileCoordsAtPoint(x, y, z))
     if ground == GROUND.INVALID or ground == GROUND.IMPASSABLE then
         splash(inst)
+        return
     end
 
     if TheWorld.Map:IsVisualGroundAtPoint(x + vx, y, z + vz) then
         splash(inst)
-    end
-end
-
-local function onsave(inst, data)
-    if inst and data then
-        data.speed = inst.Physics:GetMotorSpeed()
-        data.angle = inst.Transform:GetRotation()
-        if inst.sg and inst.sg.currentstate and inst.sg.currentstate.name then
-            data.state = inst.sg.currentstate.name
-        end
-    end
-end
-
-local function onload(inst, data)
-    if inst and data then
-        inst.Transform:SetRotation(data.angle or 0)
-        inst.Physics:SetMotorVel(data.speed or 0, 0, 0)
-        if inst.sg and data.state then
-            inst.sg:GoToState(data.state)
-        end
+        return
     end
 end
 
@@ -244,12 +256,20 @@ local function ripple(Sim)
     local trans = inst.entity:AddTransform()
     inst.entity:AddNetwork()
     inst.entity:AddSoundEmitter()
-    trans:SetFourFaced()
+    trans:SetEightFaced()
     inst.entity:AddPhysics()
     inst.Physics:SetSphere(1)
-    inst.Physics:ClearCollisionMask()
-    inst.OnEntitySleep = onSleep
+    inst.Physics:SetCollisionGroup(COLLISION.OBSTACLES)
+    inst.Physics:SetCollisionMask(
+        COLLISION.WORLD,
+        COLLISION.OBSTACLES,
+        COLLISION.SMALLOBSTACLES,
+        COLLISION.CHARACTERS,
+        COLLISION.GIANTS
+    )
+    inst.Physics:SetCollides(false)
     inst.done = false
+    inst.persists = false
     local anim = inst.entity:AddAnimState()
     inst.AnimState:SetBuild("waverripple")
     inst.AnimState:SetBank("wave_ripple_sw")
@@ -257,6 +277,17 @@ local function ripple(Sim)
     inst:AddTag("FX")
     inst:AddTag("aquatic")
     inst:AddTag("ondamedia")
+    inst:AddTag("wave")
+    inst:AddTag("scarytoprey")
+    inst:AddTag("tropical_wave")
+
+    if not TheNet:IsDedicated() then
+        inst:AddComponent("boattrail")
+        inst.components.boattrail.effect_spawn_rate = 2.5
+        inst.components.boattrail.radius = 1
+        inst.components.boattrail.scale_x = .75
+        inst.components.boattrail.scale_z = .75
+    end
 
     inst.entity:SetPristine()
 
@@ -264,17 +295,18 @@ local function ripple(Sim)
         return inst
     end
 
+    -- TintByOceanTile can remove waves on invalid tiles; only the server owns their lifetime.
+    TintByOceanTile(inst)
+    inst.OnEntitySleep = onSleep
     inst.hitdamage = -WAVE_HIT_DAMAGE
     inst.hitmoisture = WAVE_HIT_MOISTURE
     inst:SetStateGraph("SGwavesw")
+    inst.idle_time = 5
     inst.soundrise = "small"
     inst.activate_collision = activate_collision
+    inst.Physics:SetCollisionCallback(oncollidewave)
 
-    inst:DoPeriodicTask(0.5, CheckGround)
-    inst:DoTaskInTime(1.5, function(inst) inst:DoPeriodicTask(0.1, oncollidewave) end)
-
-    inst.OnSave = onsave
-    inst.OnLoad = onload
+    inst:DoPeriodicTask(.75, CheckGround)
 
     return inst
 end
@@ -284,17 +316,37 @@ local function rogue(Sim)
     local trans = inst.entity:AddTransform()
     inst.entity:AddNetwork()
     inst.entity:AddSoundEmitter()
-    trans:SetFourFaced()
+    trans:SetEightFaced()
     inst.entity:AddPhysics()
     inst.Physics:SetSphere(1)
-    inst.Physics:ClearCollisionMask()
+    inst.Physics:SetCollisionGroup(COLLISION.OBSTACLES)
+    inst.Physics:SetCollisionMask(
+        COLLISION.WORLD,
+        COLLISION.OBSTACLES,
+        COLLISION.SMALLOBSTACLES,
+        COLLISION.CHARACTERS,
+        COLLISION.GIANTS
+    )
+    inst.Physics:SetCollides(false)
     inst.done = false
+    inst.persists = false
     local anim = inst.entity:AddAnimState()
     anim:SetBuild("wave_rogue")
     anim:SetBank("wave_rogue")
 
     inst:AddTag("aquatic")
     inst:AddTag("FX")
+    inst:AddTag("wave")
+    inst:AddTag("scarytoprey")
+    inst:AddTag("tropical_wave")
+
+    if not TheNet:IsDedicated() then
+        inst:AddComponent("boattrail")
+        inst.components.boattrail.effect_spawn_rate = 2.5
+        inst.components.boattrail.radius = 1.25
+        inst.components.boattrail.scale_x = 1.1
+        inst.components.boattrail.scale_z = 1.1
+    end
 
     inst.entity:SetPristine()
 
@@ -302,27 +354,24 @@ local function rogue(Sim)
         return inst
     end
 
+    TintByOceanTile(inst)
     inst.hitdamage = -ROGUEWAVE_HIT_DAMAGE
     inst.hitmoisture = ROGUEWAVE_HIT_MOISTURE
 
     inst:SetStateGraph("SGwavesw")
 
-    inst.idle_time = 1
+    inst.idle_time = 5
 
     inst.soundrise = "large"
     inst.soundloop = "large_LP"
     inst.soundtidal = "tidal_wave"
 
     inst.activate_collision = activate_collision
+    inst.Physics:SetCollisionCallback(oncolliderogue)
     inst:ListenForEvent("onremove", onRemove)
 
-    inst:DoPeriodicTask(0.5, CheckGround)
-    inst:DoPeriodicTask(0.1, oncolliderogue)
-
+    inst:DoPeriodicTask(.75, CheckGround)
     inst.OnEntitySleep = onSleep
-
-    inst.OnSave = onsave
-    inst.OnLoad = onload
 
     return inst
 end

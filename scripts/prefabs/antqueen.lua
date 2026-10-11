@@ -94,18 +94,20 @@ local function OnSave(inst, data)
 end
 
 local function OnAttacked(inst, data)
+    local attacker = data and data.attacker
+    if attacker == nil then return end
     if inst.components.combat and inst.components.combat.target == nil then
-        inst.components.combat.target = data.attacker
+        inst.components.combat:SetTarget(attacker)
         inst.sg:GoToState("wake")
     end
 
-    local attacker = data.attacker
     local x, y, z = inst.Transform:GetWorldPosition()
     local eles = TheSim:FindEntities(x, y, z, 30, { "ant" })
     if attacker then
-        for k, guardas in pairs(eles) do
-            if guardas.components.combat and guardas.components.combat.target == nil then
-                guardas.components.combat
+        for _, guard in pairs(eles) do
+            if guard.components.combat and guard.components.combat.target == nil then
+                guard._ant_attacker = attacker
+                guard.components.combat
                     :SetTarget(attacker)
             end
         end
@@ -230,7 +232,7 @@ local function makethronewall(name, physics_size, assets, prefabs)
 end
 
 
-local respawndays = 80 --revive em 8 dias
+local respawndays = 80
 
 local function OnTimerDone(inst, data)
     if data.name == "spawndelay" then

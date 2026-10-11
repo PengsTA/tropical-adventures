@@ -1,19 +1,12 @@
 local function Check(inst)
-    if TUNING.hayfever and TheWorld.state.ispollendust then
+    local climate = inst.components.regionalclimate
+    if TUNING.hayfever and climate ~= nil and climate:IsPollenActive() then
         inst.components.hayfever:Enable()
     else
         inst.components.hayfever:Disable()
     end
 end
 
-
-local function onnextsneeze(self, nextsneeze)
-    -- -- print("hayfever component set nextsneeze")
-    -- -- print(nextsneeze)
-    if nextsneeze >= 0 then
-        self.inst.replica.hayfever:Setnextsneeze(nextsneeze)
-    end
-end
 
 --- 哈姆雷特花粉症
 local Hayfever = Class(function(self, inst)
@@ -24,13 +17,16 @@ local Hayfever = Class(function(self, inst)
     self.wantstosneeze = false
     self.nextsneeze    = self:GetNextSneezTimeInitial() --下一次打喷嚏时间
 
-    inst:WatchWorldState("ispollendust", Check)
-    -- inst:ListenForEvent("regionchange", Check)
+    inst:ListenForEvent("regionalclimatechanged", Check)
     inst:DoTaskInTime(0, Check)
-    -- inst:StartUpdatingComponent(self)
-end, nil, {
-    nextsneeze = onnextsneeze,
-})
+end)
+
+function Hayfever:SyncNextSneeze()
+    local classified = self.inst.player_classified
+    if classified ~= nil and classified._tropical_nextsneeze ~= nil then
+        classified._tropical_nextsneeze:set(self.enabled and GetTime() + math.max(self.nextsneeze, 0) or -1)
+    end
+end
 
 function Hayfever:GetNextSneezTime()
     return math.random(10, 20) -- / TheWorld.state.pollendustrate
@@ -43,12 +39,14 @@ end
 function Hayfever:SetNextSneezeTime(newtime)
     if self.nextsneeze < newtime then
         self.nextsneeze = newtime
+        self:SyncNextSneeze()
     end
 end
 
 function Hayfever:CanSneeze()
     local x, y, z = self.inst.Transform:GetWorldPosition()
-    return self.inst:AwareInHamletArea() and not self.inst:HasTag("has_gasmask")
+    local climate = self.inst.components.regionalclimate
+    return climate ~= nil and climate:IsPollenActive() and not self.inst:HasTag("has_gasmask")
         and not self.inst:HasTag("has_hayfeverhat")
         and #TheSim:FindEntities(x, y, z, TUNING.FAN_RANGE, { "prevents_hayfever" }) <= 0 --工作的摆动风扇旁边
 end
@@ -66,6 +64,7 @@ function Hayfever:OnUpdate(dt)
                     self.nextsneeze = self:GetNextSneezTime()
                     self.sneezed = false
                 end
+                self:SyncNextSneeze()
                 self.inst:PushEvent("sneeze")
             end
         else
@@ -122,6 +121,7 @@ function Hayfever:Enable()
         self.enabled = true
 
         self.inst:StartUpdatingComponent(self)
+        self:SyncNextSneeze()
     end
 end
 
@@ -130,11 +130,12 @@ function Hayfever:Disable()
         -- self.inst:PushEvent("updatehayfever", { sneezetime = nil })
         self.inst.components.talker:Say(GetString(self.inst.prefab, "ANNOUNCE_HAYFEVER_OFF"))
 
-        self:SetNextSneezeTime(self:GetNextSneezTimeInitial())
+        self.nextsneeze = math.max(self.nextsneeze, self:GetNextSneezTimeInitial())
     end
 
     self.enabled = false
     self.inst:StopUpdatingComponent(self)
+    self:SyncNextSneeze()
 end
 
 function Hayfever:GetDebugString()
@@ -157,18 +158,16 @@ function Hayfever:DoSneezeEffects()
 
     if itemstodrop > 0 then
         local findItems = self.inst.components.inventory:FindItems(function(item) return not item:HasTag("nosteal") end)
-        for i = 1, itemstodrop do
-            for i = 1, itemstodrop do
-                if #findItems > 0 then
-                    local itemnum = math.random(1, #findItems)
-                    local item = findItems[itemnum]
+        for _ = 1, itemstodrop do
+            if #findItems > 0 then
+                local itemnum = math.random(1, #findItems)
+                local item = findItems[itemnum]
 
-                    table.remove(findItems, itemnum)
+                table.remove(findItems, itemnum)
 
-                    if item then
-                        local direction = Vector3(math.random(1) - 2, 0, math.random(1) - 2)
-                        self.inst.components.inventory:DropItem(item, false, direction:GetNormalized())
-                    end
+                if item then
+                    local direction = Vector3(math.random() * 2 - 1, 0, math.random() * 2 - 1)
+                    self.inst.components.inventory:DropItem(item, false, direction:GetNormalized())
                 end
             end
         end
@@ -177,7 +176,7 @@ end
 
 function Hayfever:OnRemoveEntity()
     self:Disable()
-    self:StopWatchingWorldState("ispollendust", Check)
+    self.inst:RemoveEventCallback("regionalclimatechanged", Check)
 end
 
 return Hayfever

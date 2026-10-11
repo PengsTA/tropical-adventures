@@ -1,8 +1,7 @@
 AddPrefabPostInit("forest", function(inst)
     if TheWorld.ismastersim then
-        inst:AddComponent("climatespawner") -----这个东西很复杂--海浪在这里
+        inst:AddComponent("interior_manager")
         inst:AddComponent("economy")
-        inst:AddComponent("contador")
         inst:AddComponent("bigfooter")
         inst:AddComponent("roottrunkinventory") ---------------这个是啥啊
         inst:AddComponent("creature_spawner")   ----不只有生物，还有旋涡，天光之类的内容
@@ -11,6 +10,12 @@ AddPrefabPostInit("forest", function(inst)
         inst:AddComponent("rainbowjellymigration")
         inst:AddComponent("quaker_interior") ------------这是啥
         inst:AddComponent("glowflyspawner")
+        inst:AddComponent("floodmanager")
+        inst:AddComponent("floodmosquitospawner")
+        inst:AddComponent("volcanomanager")
+        inst:AddComponent("hurricanemanager")
+        inst:AddComponent("monsoonmanager")
+        inst:AddComponent("oceanwavemanager")
 
 
         if TUNING.sealnado then
@@ -19,6 +24,7 @@ AddPrefabPostInit("forest", function(inst)
 
 
         if TUNING.hamlet then
+            inst:AddComponent("bramblemanager")
             inst:AddComponent("banditmanager")
 
             if TUNING.roc then
@@ -31,14 +37,17 @@ end)
 
 AddPrefabPostInit("cave", function(inst)
     if TheWorld.ismastersim then
+        inst:AddComponent("interior_manager")
         inst:AddComponent("roottrunkinventory")
         inst:AddComponent("quaker_interior")
         inst:AddComponent("economy")
-        inst:AddComponent("contador")
     end
 end)
 
 AddPrefabPostInit("world", function(inst)
+    if TheWorld.ismastersim then
+        inst:AddComponent("tigersharker")
+    end
     if TUNING.aporkalypse and TheWorld.ismastersim then
         inst:AddComponent("aporkalypse")
         if KnownModIndex:IsModEnabled("workshop-2657513551") then
@@ -102,8 +111,103 @@ local function NetAporkalypsePostInit(inst)
     end
 end
 
+local function NetVolcanoPostInit(inst)
+    inst._tropical_volcano_active = net_bool(inst.GUID, "tropical_volcano.active", "tropicalvolcanostatedirty")
+    inst._tropical_volcano_erupting = net_bool(inst.GUID, "tropical_volcano.erupting", "tropicalvolcanostatedirty")
+    inst._tropical_volcano_ashrate = net_byte(inst.GUID, "tropical_volcano.ashrate", "tropicalvolcanostatedirty")
+    inst._tropical_volcano_smokerate = net_byte(inst.GUID, "tropical_volcano.smokerate", "tropicalvolcanostatedirty")
+    inst._tropical_volcano_active:set_local(false)
+    inst._tropical_volcano_erupting:set_local(false)
+    inst._tropical_volcano_ashrate:set_local(0)
+    inst._tropical_volcano_smokerate:set_local(0)
+
+    inst:ListenForEvent("tropicalvolcanostatedirty", function()
+        if TheWorld ~= nil then
+            TheWorld:PushEvent("tropicalvolcanostatechanged", {
+                active = inst._tropical_volcano_active:value(),
+                erupting = inst._tropical_volcano_erupting:value(),
+                ash_rate = inst._tropical_volcano_ashrate:value(),
+                smoke_rate = inst._tropical_volcano_smokerate:value() / 100,
+            })
+        end
+    end)
+end
+
+local function NetFloodPostInit(inst)
+    inst._tropical_flood_level = net_byte(inst.GUID, "tropical_flood.level", "tropicalfloodleveldirty")
+    inst._tropical_flood_hamletlevel = net_byte(inst.GUID, "tropical_flood.hamletlevel", "tropicalfloodleveldirty")
+    inst._tropical_flood_level:set_local(0)
+    inst._tropical_flood_hamletlevel:set_local(0)
+
+    inst:ListenForEvent("tropicalfloodleveldirty", function()
+        if TheWorld ~= nil then
+            TheWorld:PushEvent("tropicalfloodlevelchanged", {
+                level = inst._tropical_flood_level:value() / 100,
+                shipwrecked_level = inst._tropical_flood_level:value() / 100,
+                hamlet_level = inst._tropical_flood_hamletlevel:value() / 100,
+            })
+        end
+    end)
+end
+
+local function NetMonsoonPostInit(inst)
+    inst._tropical_monsoon_windstrength = net_byte(inst.GUID, "tropical_monsoon.windstrength", "tropicalmonsoonwinddirty")
+    inst._tropical_monsoon_windangle = net_byte(inst.GUID, "tropical_monsoon.windangle", "tropicalmonsoonwinddirty")
+    inst._tropical_monsoon_windstrength:set_local(0)
+    inst._tropical_monsoon_windangle:set_local(0)
+
+    inst:ListenForEvent("tropicalmonsoonwinddirty", function()
+        if TheWorld ~= nil then
+            TheWorld:PushEvent("tropicalmonsoonwindchanged", {
+                strength = inst._tropical_monsoon_windstrength:value() / 100,
+                angle = inst._tropical_monsoon_windangle:value() / 255 * 360,
+            })
+        end
+    end)
+end
+
+local function NetHurricanePostInit(inst)
+    inst._tropical_hurricane_active = net_bool(inst.GUID, "tropical_hurricane.active", "tropicalhurricanestatedirty")
+    inst._tropical_hurricane_tease = net_bool(inst.GUID, "tropical_hurricane.tease", "tropicalhurricanestatedirty")
+    inst._tropical_hurricane_stormstrength = net_byte(inst.GUID, "tropical_hurricane.stormstrength", "tropicalhurricanestatedirty")
+    inst._tropical_hurricane_hailrate = net_byte(inst.GUID, "tropical_hurricane.hailrate", "tropicalhurricanestatedirty")
+    inst._tropical_hurricane_windactive = net_bool(inst.GUID, "tropical_hurricane.windactive", "tropicalhurricanestatedirty")
+    inst._tropical_hurricane_thunder = net_byte(inst.GUID, "tropical_hurricane.thunder", "tropicalhurricanethunderdirty")
+    inst._tropical_hurricane_active:set_local(false)
+    inst._tropical_hurricane_tease:set_local(false)
+    inst._tropical_hurricane_stormstrength:set_local(0)
+    inst._tropical_hurricane_hailrate:set_local(0)
+    inst._tropical_hurricane_windactive:set_local(false)
+    inst._tropical_hurricane_thunder:set_local(0)
+
+    inst:ListenForEvent("tropicalhurricanestatedirty", function()
+        if TheWorld ~= nil then
+            TheWorld:PushEvent("tropicalhurricanestatechanged", {
+                active = inst._tropical_hurricane_active:value(),
+                tease = inst._tropical_hurricane_tease:value(),
+                storm_strength = inst._tropical_hurricane_stormstrength:value() / 100,
+                hail_rate = inst._tropical_hurricane_hailrate:value() / 100,
+                wind_active = inst._tropical_hurricane_windactive:value(),
+            })
+        end
+    end)
+    inst:ListenForEvent("tropicalhurricanethunderdirty", function()
+        if TheWorld ~= nil then
+            TheWorld:PushEvent("tropicalhurricanethunder")
+        end
+    end)
+
+    if TheWorld ~= nil and TheWorld.ismastersim and TheWorld.components.hurricanemanager ~= nil then
+        TheWorld.components.hurricanemanager:SyncNetworkState()
+    end
+end
+
 AddPrefabPostInit("forest_network", function(inst)
     NetAporkalypsePostInit(inst)
+    NetVolcanoPostInit(inst)
+    NetFloodPostInit(inst)
+    NetHurricanePostInit(inst)
+    NetMonsoonPostInit(inst)
     inst:AddComponent("weatherham")
 end)
 

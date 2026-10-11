@@ -92,6 +92,7 @@ local function SetHidden(inst)
 	inst.Physics:SetCollides(false)
 	inst:Hide()
 	inst.components.stickable:UnStuck()
+	inst.components.growable:StartGrowing()
 end
 
 -- stage 2

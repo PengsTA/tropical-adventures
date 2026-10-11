@@ -24,19 +24,23 @@ local function cancreateeruption(staff, caster, target, pos)
 end
 
 local function createeruption(staff, target, pos)
-    staff.components.finiteuses:Use(1)
+    if pos == nil then
+        return
+    end
 
     local delay = 0.0
     for i = 1, VOLCANOSTAFF_FIRERAIN_COUNT, 1 do
         local x, y, z = VOLCANOSTAFF_FIRERAIN_RADIUS * UnitRand() + pos.x, pos.y,
             VOLCANOSTAFF_FIRERAIN_RADIUS * UnitRand() + pos.z
-        staff:DoTaskInTime(delay, function(inst)
+        TheWorld:DoTaskInTime(delay, function()
             local firerain = SpawnPrefab("firerain")
             firerain.Transform:SetPosition(x, y, z)
             firerain:StartStep()
         end)
         delay = delay + VOLCANOSTAFF_FIRERAIN_DELAY
     end
+
+    staff.components.finiteuses:Use(1)
 
     --    TheWorld.components.volcanomanager:StartStaffEffect(VOLCANOSTAFF_ASH_TIMER)
 end
@@ -82,6 +86,14 @@ local function commonfn(colour, tags, hasskin)
         end
     end
 
+    if colour == "volcanostaff" then
+        inst:AddComponent("reticule")
+        inst.components.reticule.targetfn = function()
+            return Vector3(ThePlayer.entity:LocalToWorldSpace(5, 0, 0))
+        end
+        inst.components.reticule.ease = true
+    end
+
     inst.entity:SetPristine()
 
     if not TheWorld.ismastersim then
@@ -113,23 +125,21 @@ end
 
 ---------COLOUR SPECIFIC CONSTRUCTIONS---------
 local function volcanostaff()
-    local inst = commonfn("volcanostaff")
+    local inst = commonfn("volcanostaff", { "nosteal", "nopunch", "castonpoint" })
 
     inst:AddTag("nosteal")
     inst.fxcolour = { 223 / 255, 208 / 255, 69 / 255 }
     inst.castsound = "dontstarve/common/staffteleport"
+
+    if not TheWorld.ismastersim then
+        return inst
+    end
 
     inst:AddComponent("spellcaster")
     inst.components.spellcaster:SetSpellFn(createeruption)
     --   inst.components.spellcaster:SetSpellTestFn(cancreateeruption)
     inst.components.spellcaster.canuseonpoint = true
     inst.components.spellcaster.canusefrominventory = false
-
-    inst:AddComponent("reticule")
-    inst.components.reticule.targetfn = function()
-        return Vector3(ThePlayer.entity:LocalToWorldSpace(5, 0, 0))
-    end
-    inst.components.reticule.ease = true
 
     inst:AddComponent("finiteuses")
     inst.components.finiteuses:SetOnFinished(onfinished)
@@ -141,18 +151,13 @@ local function volcanostaff()
 end
 
 
-local function spawngaze(inst, pos, target)
-    local rotation = pos
+local function spawngaze(x, y, z, rotation, radius, host)
     local beam = SpawnPrefab("gaze_beam2")
-    local pt = Vector3(inst.Transform:GetWorldPosition())
     local angle = rotation * DEGREES
-    inst.radius = inst.radius + 3
-    beam.Transform:SetScale(0.2 + 0.053 * inst.radius, 0.2 + 0.053 * inst.radius, 0.2 + 0.053 * inst.radius)
-    local offset = Vector3(inst.radius * math.cos(angle), 0, -inst.radius * math.sin(angle))
-    local newpt = pt + offset
-
-    beam.Transform:SetPosition(newpt.x, newpt.y, newpt.z)
-    beam.host = inst.components.inventoryitem:GetGrandOwner()
+    local scale = 0.2 + 0.053 * radius
+    beam.Transform:SetScale(scale, scale, scale)
+    beam.Transform:SetPosition(x + radius * math.cos(angle), y, z - radius * math.sin(angle))
+    beam.host = host ~= nil and host:IsValid() and host or nil
     beam.Transform:SetRotation(rotation)
 end
 
@@ -164,16 +169,21 @@ end
 
 
 local function spawntornado(inst, target, pos)
-    inst.components.finiteuses:Use(1)
+    if target == nil or not target:IsValid() then
+        return
+    end
     local x, y, z = target.Transform:GetWorldPosition()
-    local pos1 = inst:GetAngleToPoint(x, y, z)
-    inst.radius = 0
-    inst.SoundEmitter:PlaySound(" dontstarve_DLC003/creatures/boss/pugalisk/gaze_LP", "gazor")
-    inst:DoTaskInTime(0.2, function() spawngaze(inst, pos1, target) end)
-    inst:DoTaskInTime(0.4, function() spawngaze(inst, pos1, target) end)
-    inst:DoTaskInTime(0.6, function() spawngaze(inst, pos1, target) end)
-    inst:DoTaskInTime(0.8, function() spawngaze(inst, pos1, target) end)
-    inst:DoTaskInTime(1.0, function() spawngaze(inst, pos1, target) end)
+    local rotation = inst:GetAngleToPoint(x, y, z)
+    local ox, oy, oz = inst.Transform:GetWorldPosition()
+    local host = inst.components.inventoryitem:GetGrandOwner()
+    inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/boss/pugalisk/gaze_LP", "gazor")
+    for i = 1, 5 do
+        local radius = i * 3
+        TheWorld:DoTaskInTime(i * 0.2, function()
+            spawngaze(ox, oy, oz, rotation, radius, host)
+        end)
+    end
+    inst.components.finiteuses:Use(1)
 end
 
 

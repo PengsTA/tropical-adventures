@@ -1,3 +1,5 @@
+local triggerdarts = require("tools/ruins_dart_triggers").Trigger
+
 local basalt_assets =
 {
 	Asset("ANIM", "anim/rock_basalt.zip"),

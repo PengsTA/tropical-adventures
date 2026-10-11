@@ -1,5 +1,6 @@
 require("brains/mosquitobrain")
 require "stategraphs/SGglowfly"
+local ClimateProfiles = require("tools/climateprofiles")
 
 local GLOWFLY_COCOON_HEALTH = 300
 local SPRING_COMBAT_MOD = 1.33
@@ -102,7 +103,9 @@ local function updatelight(inst)
 
 	--if TheWorld.state.remainingdaysinseason < 4 and not inst:HasTag("cocoon") and math.random() < 0.30 then
 
-	if TheWorld.state.iswinter and not inst:HasTag("cocoon") and math.random() < 0.30 then
+	if ClimateProfiles.IsHamletHumid(TheWorld.state)
+		and not inst:HasTag("cocoon")
+		and math.random() < 0.30 then
 		local map = TheWorld.Map
 		local x, y, z = inst.Transform:GetWorldPosition()
 		local ground = map:GetTile(map:GetTileCoordsAtPoint(x, y, z))
@@ -155,7 +158,7 @@ end
 
 local function KillerRetarget(inst)
 	local range = 20
-	if TheWorld.state.isspring then
+	if ClimateProfiles.IsHamletRainy(TheWorld.state) then
 		range = range * SPRING_COMBAT_MOD
 	end
 	local notags = { "FX", "NOCLICK", "INLIMBO", "insect" }
@@ -168,7 +171,7 @@ end
 local function OnAttacked(inst, data)
 	inst.components.combat:SetTarget(data.attacker)
 	local shareRange = SHARE_TARGET_DIST
-	if TheWorld.state.isspring then
+	if ClimateProfiles.IsHamletRainy(TheWorld.state) then
 		shareRange = shareRange * SPRING_COMBAT_MOD
 	end
 	inst.components.combat:ShareTarget(data.attacker, shareRange,

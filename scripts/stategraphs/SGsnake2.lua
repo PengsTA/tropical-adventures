@@ -1,7 +1,7 @@
 require("stategraphs/commonstates")
 
 local function getsound(inst, id)
-	return inst.sounds[id]
+	return (inst.sounds and inst.sounds[id]) or ("dontstarve_DLC002/creatures/snake/" .. id)
 end
 
 local actionhandlers =

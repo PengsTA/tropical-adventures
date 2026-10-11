@@ -14,14 +14,18 @@ local assets =
 local brain = require("brains/woodlegsbrain")
 
 local function Retarget(inst)
+    local leader = inst.components.follower.leader
+    if leader == nil or not leader:IsValid() then
+        return nil
+    end
     return FindEntity(
         inst,
         20,
         function(guy)
-            return inst._playerlink ~= nil
-                and inst.components.combat:CanTarget(guy)
-                and (guy.components.combat.target == inst._playerlink or
-                    inst._playerlink.components.combat.target == guy)
+            return inst.components.combat:CanTarget(guy)
+                and guy.components.combat ~= nil
+                and (guy.components.combat.target == leader or
+                    (leader.components.combat ~= nil and leader.components.combat.target == guy))
         end,
         { "_combat", "_health" },
         { "INLIMBO", "noauradamage" }
@@ -34,13 +38,17 @@ local function OnWaterChange(inst, onwater)
 
     if onwater then
         local pegabarco = SpawnPrefab("woodlegsboat")
-        inst.components.driver:BoatAttached(pegabarco)
-        inst:AddTag("aquatic")
+        if inst.components.sailor ~= nil then
+            inst.components.sailor:Embark(pegabarco)
+        end
     else
-        local barcoinv = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO)
-        inst.components.driver:BoatDetached(inst)
-        if barcoinv then barcoinv:Remove() end
-        inst:RemoveTag("aquatic")
+        local boat = inst.components.sailor ~= nil and inst.components.sailor:GetBoat() or nil
+        if inst.components.sailor ~= nil then
+            inst.components.sailor:ForceDisembark("land")
+        end
+        if boat ~= nil and boat:IsValid() then
+            boat:Remove()
+        end
         inst.sg:GoToState("idle")
     end
 end
@@ -198,13 +206,11 @@ local function fn()
     end
 
 
-    inst:AddComponent("driver")
+    inst:AddComponent("sailor")
     --print("   health")
     inst:AddComponent("health")
     inst.components.health:SetMaxHealth(600)
     inst.components.health:StartRegen(1, 1)
-
-    inst._playerlink = nil
 
     inst:AddComponent("inspectable")
 

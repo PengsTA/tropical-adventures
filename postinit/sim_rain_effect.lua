@@ -1,26 +1,29 @@
-------rain effect---------------
+local RegionDefs = require("tools/regiondefs")
+
 AddSimPostInit(function()
-    GLOBAL.EmitterManager.old_updatefuncs = { snow = nil, rain = nil, pollen = nil }
+    local original_update_funcs = setmetatable({}, { __mode = "k" })
+    local noop = function() end
     local old_PostUpdate = GLOBAL.EmitterManager.PostUpdate
-    local function new_PostUpdate(self, ...)
+
+    local function IsLocalPlayerInterior()
+        local player = GLOBAL.ThePlayer
+        return player ~= nil and player:HasTag(RegionDefs.INTERIOR_TAG)
+    end
+
+    GLOBAL.EmitterManager.PostUpdate = function(self, ...)
+        local suppress_precipitation = IsLocalPlayerInterior()
         for inst, data in pairs(self.awakeEmitters.infiniteLifetimes) do
             if inst.prefab == "pollen" or inst.prefab == "snow" or inst.prefab == "rain" then
-                if self.old_updatefuncs[inst.prefab] == nil then
-                    self.old_updatefuncs[inst.prefab] = data.updateFunc
+                local original = original_update_funcs[inst]
+                if original == nil then
+                    original = data.updateFunc
+                    original_update_funcs[inst] = original
                 end
-                local pt = inst:GetPosition()
-                local ents = GLOBAL.TheSim:FindEntities(pt.x, pt.y, pt.z, 40, { "interior_center" })
-                if #ents > 0 then
-                    data.updateFunc = function() end -- empty function
-                else
-                    data.updateFunc = self.old_updatefuncs[inst.prefab] ~= nil and self.old_updatefuncs[inst.prefab] or
-                        function() end -- the original one
-                end
+                data.updateFunc = suppress_precipitation and noop or original
             end
         end
         if old_PostUpdate ~= nil then
             return old_PostUpdate(self, ...)
         end
     end
-    GLOBAL.EmitterManager.PostUpdate = new_PostUpdate
 end)

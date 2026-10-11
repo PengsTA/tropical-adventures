@@ -33,8 +33,6 @@ local function fn()
 
     inst:AddComponent("inspectable")
 
-    inst:AddComponent("appeasement")
-    inst.components.appeasement.appeasementvalue = TUNING.APPEASEMENT_LARGE
 
     inst:AddComponent("inventoryitem")
 

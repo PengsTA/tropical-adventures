@@ -1,12 +1,25 @@
+local ClimateProfiles = require("tools/climateprofiles")
+
 local Bloomable = Class(function(self, inst)
     self.inst = inst
-    self.season = TheWorld.state.isspring
+    self.season = false
     self.blooming = false
     self.time = 0
     self.timevarriance = TUNING.TOTAL_DAY_TIME / 2
 
     self.inst:WatchWorldState("season", function(data) self:SeasonChange(data) end)
 end)
+
+function Bloomable:IsBloomSeason()
+    local x, _, z = self.inst.Transform:GetWorldPosition()
+    local primary = TheWorld.Map:GetPrimaryRegionAtPoint(x, 0, z)
+    if primary == "hamlet" then
+        return ClimateProfiles.IsHamletLush(TheWorld.state)
+    elseif primary == "shipwrecked" then
+        return ClimateProfiles.IsShipwreckedMonsoon(TheWorld.state)
+    end
+    return TheWorld.state.isspring
+end
 
 function Bloomable:SetCanBloom(fn)
     self.canbloom = fn
@@ -73,10 +86,10 @@ end
 
 function Bloomable:SeasonChange(data)
     if self:CanBloom() then
-        if TheWorld.state.isspring and not self.blooming then
+        if self:IsBloomSeason() and not self.blooming then
             -- print("OHHHH")
             self:DoStartBloomTask(self.time + math.random() * self.timevarriance)
-        elseif (not TheWorld.state.isspring) and self.blooming then
+        elseif not self:IsBloomSeason() and self.blooming then
             self:DoStopBloomTask(self.time + math.random() * self.timevarriance)
         end
     end

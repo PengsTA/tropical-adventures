@@ -153,7 +153,6 @@ function MakeWallType(data)
     local prefabs =
     {
         "collapse_small",
-        "brokenwall_" .. data.name,
     }
 
     local bank = data.name == "dreadstone" and "wall_dreadstone" or "wall"
@@ -343,6 +342,7 @@ function MakeWallType(data)
 
         inst:AddTag("wall")
         inst:AddTag("noauradamage")
+        inst:AddTag("poisonimmune")
 
         inst.AnimState:SetBank(bank)
         inst.AnimState:SetBuild("wall_" .. data.name)

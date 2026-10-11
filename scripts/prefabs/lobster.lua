@@ -33,6 +33,15 @@ local LOBSTER_FISH_DEF =
     weight_max = 299.44,
 }
 
+local function OnTrawl(inst)
+    local loot = SpawnPrefab("lobster_land")
+    if inst.components.weighable ~= nil and loot ~= nil and loot.components.weighable ~= nil then
+        loot.components.weighable:CopyWeighable(inst.components.weighable)
+    end
+    inst:Remove()
+    return loot
+end
+
 local function fn()
     local inst = Prefabs.wobster_sheller_land.fn()
     inst:SetPrefabName("lobster_land")
@@ -70,6 +79,10 @@ local function water_fn()
     local lootdropper = inst.components.lootdropper or inst:AddComponent("lootdropper")
     lootdropper.trappable = true
     lootdropper:SetLoot({ "lobster_land" })
+
+    inst:AddComponent("trawlable")
+    inst.components.trawlable:SetIgnoreVisibility(true)
+    inst.components.trawlable:SetTrawlFn(OnTrawl)
 
     inst:SetStateGraph("SGlobster")
 

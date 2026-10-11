@@ -1,65 +1,44 @@
 local interior = resolvefilepath("images/colour_cubes/pigshop_interior_cc.tex")
-local batvision = resolvefilepath("images/colour_cubes/bat_vision_on_cc.tex")
-
-local OVERRIDE_SEASON_COLOURCUBES = {
-
-    interior = {
-        day = interior,
-        dusk = interior,
-        night = interior,
-        full_moon = interior
-
-    },
-
-    batvision = {
-        day = batvision,
-        dusk = batvision,
-        night = batvision,
-        full_moon = batvision
-
-    }
-
+local INTERIOR_COLOURCUBES = {
+    day = interior,
+    dusk = interior,
+    night = interior,
+    full_moon = interior,
 }
-
-
-
-local VISION_PHASEFN = {
-    interior = {
-        blendtime = 0.5,
-        events = {},
-        fn = nil,
-    },
-
-}
-
+local INTERIOR_SOURCE = "tropical.inhamroom"
 
 AddComponentPostInit("playervision", function(self)
-    -- local NIGHTVISION_COLOURCUBES = Upvaluehelper.GetUpvalue(self.UpdateCCTable, "NIGHTVISION_COLOURCUBES")
-    -- local GHOSTVISION_COLOURCUBES = Upvaluehelper.GetUpvalue(self.UpdateCCTable, "GHOSTVISION_COLOURCUBES")
-    -- local NIGHTVISION_PHASEFN = Upvaluehelper.GetUpvalue(self.UpdateCCTable, "NIGHTVISION_PHASEFN")
+    local updating = false
+    local ininterior = false
+    local UpdateCCTable = self.UpdateCCTable
 
-    -- self.inst:ListenForEvent("enterinterior_client", function() self:UpdateCCTable() end)
-    -- self.inst:ListenForEvent("leaveinterior_client", function() self:UpdateCCTable() end)
-    -- self.inst:WatchWorldState("isaporkalypse", function() self:UpdateCCTable() end)
-    self.inst:ListenForEvent("regionchange_client", function() self:UpdateCCTable() end)
-
-    local _UpdateCCTable = self.UpdateCCTable
-    function self:UpdateCCTable()
-        _UpdateCCTable(self)
-
-        -- if TheWorld.state.isaporkalypse --[[and not TheWorld:HasTag("cave")]] then
-        --     local cc = OVERRIDE_SEASON_COLOURCUBES.aporkalypse
-        --     self.currentcctable = cc
-        --     self.inst:PushEvent("ccoverrides", cc)
-        --     self.inst:PushEvent("ccphasefn", VISION_PHASEFN.aporkalypse)
-        --     return
-        -- end
-
-        if self.inst:IsInHamRoom() then
-            local cc = OVERRIDE_SEASON_COLOURCUBES.interior
-            self.currentcctable = cc
-            self.inst:PushEvent("ccoverrides", cc)
-            self.inst:PushEvent("ccphasefn", VISION_PHASEFN.interior)
+    function self:RefreshInteriorVision()
+        if not updating then
+            -- Use replicated region state, not the arrival order of position packets.
+            local inside = self.inst:HasTag("region_interior")
+            if inside ~= ininterior then
+                ininterior = inside
+                updating = true
+                if inside then
+                    self:PushForcedNightVision(INTERIOR_SOURCE, 1, INTERIOR_COLOURCUBES, true)
+                else
+                    self:PopForcedNightVision(INTERIOR_SOURCE)
+                end
+                updating = false
+            end
         end
     end
+
+    function self:UpdateCCTable(...)
+        self:RefreshInteriorVision()
+        return UpdateCCTable(self, ...)
+    end
+
+    local function Refresh()
+        self:UpdateCCTable()
+    end
+    self.inst:ListenForEvent("regionchange_client", Refresh)
+    self.inst:ListenForEvent("regionchange", Refresh)
+    self.inst:ListenForEvent("playeractivated", Refresh)
+    self.inst:DoTaskInTime(0, Refresh)
 end)

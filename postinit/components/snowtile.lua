@@ -37,7 +37,7 @@ AddClassPostConstruct("components/weather", function(cmp)
             local diff = level - _level
             local maxStep = 0.05 -- Set your desired max step here
 
-            if not ThePlayer or not ThePlayer:AwareInTropicalArea() then
+            if not ThePlayer or not ThePlayer:AwareInTropicalRegion() then
                 -- print("tropical_world_snow11111")
                 -- Clamp the change to a maximum step size
                 if diff > maxStep then

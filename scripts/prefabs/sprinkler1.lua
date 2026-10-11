@@ -22,7 +22,7 @@ local prefabs =
 	--	"alloy",
 }
 
-RANGE = 8
+local RANGE = 8
 
 local function IsWater(tile)
 	return tile == GROUND.OCEAN_COASTAL or
@@ -286,7 +286,7 @@ local function UpdateSpray(inst)
 	OnFuelSectionChange(inst)
 	local x, y, z = inst.Transform:GetWorldPosition()
 	--    local ents = TheSim:FindEntities(x, y, z, RANGE)
-	local GARDENING_CANT_TAGS = { "pickable", "stump", "withered", "barren", "INLIMBO" }
+	local GARDENING_CANT_TAGS = { "stump", "INLIMBO" }
 	local ents = TheSim:FindEntities(x, y, z, RANGE, nil, GARDENING_CANT_TAGS)
 
 	if not inst.moisture_targets then
@@ -299,15 +299,14 @@ local function UpdateSpray(inst)
 	inst.moisture_targets = {}
 
 	for k, v in pairs(ents) do
+		if v.components.tropicalplantmoisture ~= nil then
+			v.components.tropicalplantmoisture:AddMoisture(MOISTURE_SPRINKLER_PERCENT_INCREASE_PER_SPRAY)
+		end
 		if v.components.moisture then
-			local equipamentos = v.components.inventory:GetWaterproofness()
-			local coberturas = v.components.moisture.inherentWaterproofness
-			local variante = equipamentos + coberturas
-			if variante > 1 then variante = 1 end
-			local quantidadefinal = 1 - variante
-
-
-			v.components.moisture:DoDelta(0.05 * quantidadefinal)
+			local equipment = v.components.inventory and v.components.inventory:GetWaterproofness() or 0
+			local inherent = v.components.moisture.inherentWaterproofness or 0
+			local wetness = math.max(0, 1 - equipment - inherent)
+			v.components.moisture:DoDelta(0.05 * wetness)
 		end
 
 		if v.components.burnable and not (v.components.inventoryitem and v.components.inventoryitem.owner) then

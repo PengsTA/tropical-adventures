@@ -138,7 +138,7 @@ AddIngredientValues({ "coconut_cooked", "coconut_halved", }, { fruit = 1, fat = 
 AddIngredientValues({ "coffeebeans", }, { fruit = .5 }, true, false)
 AddIngredientValues({ "coffeebeans_cooked", }, { fruit = 1 }, true, false)
 AddIngredientValues(
-    { "aloe", "asparagus", "foliage", "gooseberry", "lotus_flower", "quagmire_spotspice_sprig", "radish", "seacucumber",
+    { "aloe", "asparagus", "foliage", "lotus_flower", "quagmire_spotspice_sprig", "radish", "seacucumber",
         "sweet_potato", "turnip", }, { veggie = 1 }, true, false)
 AddIngredientValues({ "seaweed", }, { veggie = 1 }, true, true)
 AddIngredientValues(

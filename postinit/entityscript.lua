@@ -2,6 +2,8 @@ require("entityscript")
 
 
 GLOBAL.setfenv(1, GLOBAL)
+local RegionDefs = require("tools/regiondefs")
+local ClimateProfiles = require("tools/climateprofiles")
 
 -- local entity_to_inst = {}
 -- local _CreateEntity = CreateEntity
@@ -16,20 +18,20 @@ GLOBAL.setfenv(1, GLOBAL)
 --     return entity_to_inst[entity] or nil
 -- end
 
-function EntityScript:IsInTropicalArea()
-    return TheWorld.Map:IsTropicalAreaAtPoint(self:GetPosition():Get())
+function EntityScript:IsInPrimaryRegion(primary)
+    return TheWorld.Map:IsPrimaryRegionAtPoint(self:GetPosition():Get(), primary)
 end
 
-function EntityScript:IsInShipwreckedArea()
-    return TheWorld.Map:IsShipwreckedAreaAtPoint(self:GetPosition():Get())
+function EntityScript:IsInSubregion(subregion)
+    return TheWorld.Map:IsSubregionAtPoint(self:GetPosition():Get(), subregion)
 end
 
-function EntityScript:IsInHamletArea()
-    return TheWorld.Map:IsHamletAreaAtPoint(self:GetPosition():Get())
+function EntityScript:IsInTropicalRegion()
+    return TheWorld.Map:IsTropicalRegionAtPoint(self:GetPosition():Get())
 end
 
-function EntityScript:IsInVolcanoArea()
-    return TheWorld.Map:IsVolcanoAreaAtPoint(self:GetPosition():Get())
+function EntityScript:IsInInterior()
+    return TheWorld.Map:IsInteriorAtPoint(self:GetPosition():Get())
 end
 
 function EntityScript:IsInWorld()
@@ -51,7 +53,7 @@ end
 
 --实体是否在虚空的房间里面
 function EntityScript:IsInHamRoom()
-    return TheWorld.Map:IsHamRoomAtPoint(self:GetPosition():Get())
+    return self:IsInInterior()
 end
 
 function EntityScript:IsOutsideWorld()
@@ -59,54 +61,152 @@ function EntityScript:IsOutsideWorld()
 end
 
 function EntityScript:IsNotInForestArea()
-    return TheWorld.Map:IsNotForestAreaAtPoint(self:GetPosition():Get())
+    return not TheWorld.Map:IsDSTRegionAtPoint(self:GetPosition():Get())
 end
 
 function EntityScript:IsInForestArea()
-    return TheWorld.Map:IsForestAreaAtPoint(self:GetPosition():Get())
+    return TheWorld.Map:IsDSTRegionAtPoint(self:GetPosition():Get())
 end
 
 function EntityScript:IsOnLandTile()
     return TheWorld.Map:IsLandTileAtPoint(self.Transform:GetWorldPosition())
 end
 
-----area aware related--------------------
----
-function EntityScript:AwareInCityArea()
-    local aware = self.components.areaaware and self.components.areaaware:CurrentlyInTag("City_Foundation") and true
-    return aware or false
+function EntityScript:GetIsFlooded()
+    if not self:IsValid() or self.Transform == nil or TheWorld == nil then
+        return false
+    end
+
+    local floodmanager = TheWorld.components ~= nil and TheWorld.components.floodmanager or nil
+    if floodmanager == nil then
+        return false
+    end
+
+    local x, _, z = self.Transform:GetWorldPosition()
+    return floodmanager:IsFloodedAtPoint(x, z)
 end
 
-function EntityScript:AwareInCivilizedArea()
-    local aware = self.components.areaaware and self.components.areaaware:CurrentlyInTag("civilized") and true
-    return aware or false
+function EntityScript:AwareGetClimateProfile()
+    local climate = self.components.regionalclimate
+    if climate ~= nil then
+        return climate:GetSeasonProfile()
+    end
+
+    local classified = self.player_classified
+    if classified ~= nil and classified._regionalclimate_profile ~= nil then
+        return ClimateProfiles.GetProfileName(classified._regionalclimate_profile:value())
+    end
+    return "dst"
 end
 
-function EntityScript:AwareInTropicalArea() ----减少计算量
-    -- return self.components.areaaware and
-    --     (self.components.areaaware:CurrentlyInTag("tropical")
-    --         or self.components.areaaware:CurrentlyInTag("ForceDisconnected")) and
-    --     true or false
-    return self:HasTag("region_shipwrecked") or self:HasTag("region_volcano") or self:HasTag("region_hamlet") or false
+function EntityScript:AwareGetClimatePhase()
+    local climate = self.components.regionalclimate
+    if climate ~= nil then
+        return climate:GetSeasonPhase()
+    end
+
+    local classified = self.player_classified
+    if classified ~= nil and classified._regionalclimate_phase ~= nil then
+        return ClimateProfiles.GetPhaseName(classified._regionalclimate_phase:value())
+    end
+    return "early"
 end
 
-function EntityScript:AwareInShipwreckedArea()
-    -- local aware = self.components.areaaware and self.components.areaaware:CurrentlyInTag("shipwrecked") and true
-    -- return aware or false
-    return self:HasTag("region_shipwrecked") or self:HasTag("region_volcano") or false
+local function GetAwarePrimaryRegion(inst)
+    return RegionDefs.GetPrimaryIdFromTags(function(tag)
+        return inst:HasTag(tag)
+    end)
 end
 
-function EntityScript:AwareInHamletArea()
-    -- local aware = self.components.areaaware and self.components.areaaware:CurrentlyInTag("hamlet") and true
-    -- return aware or false
-    return self:HasTag("region_hamlet") or false
+local function GetAwareSubregion(inst)
+    return RegionDefs.GetSubregionIdFromTags(function(tag)
+        return inst:HasTag(tag)
+    end)
 end
 
-function EntityScript:AwareInVolcanoArea()
-    -- local aware = self.components.areaaware and self.components.areaaware:CurrentlyInTag("volcano") and true
-    -- return aware or false
-    return self:HasTag("region_volcano") or false
+function EntityScript:AwareHasTopologyTag(tag)
+    local aware = self.components.areaaware
+    return aware ~= nil and aware:CurrentlyInTag(tag) and true or false
 end
+
+function EntityScript:AwareInPrimaryRegion(primary)
+    -- local current = GetAwarePrimaryRegion(self)
+    -- return current ~= nil and current == RegionDefs.GetPrimaryId(primary)
+    return self:HasTag("region_primary_" .. RegionDefs.PRIMARY_NAMES[primary])
+end
+
+function EntityScript:AwareInSubregion(subregion)
+    -- local current = GetAwareSubregion(self)
+    -- return current ~= nil and current == RegionDefs.GetSubregionId(subregion)
+    return self:HasTag("region_sub_" .. RegionDefs.SUBREGION_NAMES[subregion])
+end
+
+function EntityScript:AwareInInterior()
+    return self:HasTag(RegionDefs.INTERIOR_TAG)
+end
+
+function EntityScript:AwareInDSTRegion()
+    return self:AwareInPrimaryRegion(RegionDefs.PRIMARY.dst)
+end
+
+function EntityScript:AwareInShipwreckedRegion()
+    return self:AwareInPrimaryRegion(RegionDefs.PRIMARY.shipwrecked)
+end
+
+function EntityScript:AwareInHamletRegion()
+    return self:AwareInPrimaryRegion(RegionDefs.PRIMARY.hamlet)
+end
+
+function EntityScript:AwareInTropicalRegion()
+    return self:AwareInShipwreckedRegion() or self:AwareInHamletRegion()
+end
+
+function EntityScript:AwareInDSTMainlandRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.dst_mainland)
+end
+
+function EntityScript:AwareInDSTMoonIslandRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.dst_moonisland)
+end
+
+function EntityScript:AwareInShipwreckedVanillaRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.sw_vanilla)
+end
+
+function EntityScript:AwareInShipwreckedVolcanoRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.sw_volcano)
+end
+
+function EntityScript:AwareInHamletCityRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.ham_city)
+end
+
+function EntityScript:AwareInHamletRainforestRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.ham_rainforest)
+end
+
+function EntityScript:AwareInHamletWildsRegion()
+    return self:AwareInSubregion(RegionDefs.SUBREGION.ham_wilds)
+end
+
+-- Legacy aliases. New gameplay code should use the explicit region names.
+EntityScript.IsInTropicalArea = EntityScript.IsInTropicalRegion
+EntityScript.IsInShipwreckedArea = function(self)
+    return self:IsInPrimaryRegion(RegionDefs.PRIMARY.shipwrecked)
+end
+EntityScript.IsInHamletArea = function(self)
+    return self:IsInPrimaryRegion(RegionDefs.PRIMARY.hamlet)
+end
+EntityScript.IsInVolcanoArea = function(self)
+    return self:IsInSubregion(RegionDefs.SUBREGION.sw_volcano)
+end
+EntityScript.AwareInCityArea = EntityScript.AwareInHamletCityRegion
+EntityScript.AwareInCivilizedArea = EntityScript
+.AwareInCityArea                                                 --function(self)  return self:AwareHasTopologyTag("civilized")  end
+EntityScript.AwareInTropicalArea = EntityScript.AwareInTropicalRegion
+EntityScript.AwareInShipwreckedArea = EntityScript.AwareInShipwreckedRegion
+EntityScript.AwareInHamletArea = EntityScript.AwareInHamletRegion
+EntityScript.AwareInVolcanoArea = EntityScript.AwareInShipwreckedVolcanoRegion
 
 -----暂时用不到修改pushevent，而且这个函数用到的太多，
 -- --推入事件
@@ -202,7 +302,7 @@ end
 
 local _SetOceanBlendParams = AnimState.SetOceanBlendParams
 function AnimState:SetOceanBlendParams(...)
-    if TUNING.ocean_style == "tropical" then return end
+    if TUNING.ocean_style == "tropical" or TUNING.ocean_style == "blue" then return end
     return _SetOceanBlendParams(self, ...)
 end
 

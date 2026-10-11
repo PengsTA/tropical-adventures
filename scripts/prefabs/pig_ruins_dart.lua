@@ -14,26 +14,44 @@ local prefabs =
 
 local PIG_RUINS_DART_DAMAGE = 34
 
-local function oncollide(inst, other)
-    if other and other.prefab ~= inst.prefab then
-        if inst.components.combat then
-            inst.components.combat:DoAttack(other, nil, nil, nil, nil) --2*25 dmg
+local function OnCollideDeferred(inst, other)
+    if not inst:IsValid() then return end
+
+    if other ~= nil and other:IsValid() and other ~= inst.shooter and (inst.prefab == nil or other.prefab ~= inst.prefab) then
+        if not other:HasTag("wall") and inst.components.combat then
+            inst.components.combat:DoAttack(other, nil, nil, nil, nil)
         end
         inst.SoundEmitter:PlaySound("dontstarve_DLC003/common/traps/blowdart_fire")
         local impactfx = SpawnPrefab("impact")
 
-        if impactfx and inst then
-            --  local follower = impactfx.entity:AddFollower()
-            --   follower:FollowSymbol(other.GUID, other.components.combat.hiteffectsymbol, 0, 0, 0 )
+        if impactfx and inst:IsValid() then
             impactfx:FacePoint(inst.Transform:GetWorldPosition())
         end
 
         local fx = SpawnPrefab("circle_puff_fx")
-        local x, y, z = inst.Transform:GetWorldPosition()
-        fx.Transform:SetPosition(x, y, z)
+        if fx and inst:IsValid() then
+            local x, y, z = inst.Transform:GetWorldPosition()
+            fx.Transform:SetPosition(x, y, z)
+        end
     end
 
     inst:Remove()
+end
+
+local function oncollide(inst, other)
+    if not inst:IsValid() or inst._hascollided then return end
+    if other ~= nil and (other == inst or other == inst.shooter or (inst.prefab ~= nil and other.prefab == inst.prefab)) then
+        return
+    end
+
+    inst._hascollided = true
+    if PhysicsCollisionCallbacks and inst.GUID then
+        PhysicsCollisionCallbacks[inst.GUID] = nil
+    end
+    if inst.Physics and inst.Physics.ClearCollisionCallback then
+        inst.Physics:ClearCollisionCallback()
+    end
+    inst:DoTaskInTime(0, OnCollideDeferred, other)
 end
 
 local function fn(Sim)
@@ -63,6 +81,8 @@ local function fn(Sim)
 
     inst:AddComponent("combat")
     inst.components.combat:SetDefaultDamage(PIG_RUINS_DART_DAMAGE)
+
+    inst:DoTaskInTime(4, inst.Remove)
 
     return inst
 end
@@ -94,7 +114,10 @@ end
 
 local function launchdart(inst, angle, xmod, zmod)
     inst:DoTaskInTime(math.random() * 0.6, function()
+        if not inst:IsValid() then return end
         local proj = SpawnPrefab("pig_ruins_dart")
+        if not proj then return end
+        proj.shooter = inst
         local x, y, z = inst.Transform:GetWorldPosition()
         proj.Transform:SetPosition(x + xmod, y, z + zmod)
         proj.Transform:SetRotation(angle)

@@ -29,6 +29,7 @@ if rawget(_G, "WorldSim") then
     modimport "scripts/map/rooms/sw"
     modimport "scripts/map/rooms/ocean"
     modimport "scripts/map/tasks/ham"
+    modimport "scripts/map/hamlet_cave_rooms"
     modimport "scripts/map/tasks/sw"
     modimport "scripts/map/newstartlocation"
 

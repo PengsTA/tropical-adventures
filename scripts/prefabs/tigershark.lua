@@ -17,6 +17,7 @@ local prefabs =
     "groundpound_fx",
     "groundpoundring_fx",
     "shark_gills",
+    "woodlegs_key3",
 }
 
 SetSharedLootTable('tigershark',
@@ -112,15 +113,13 @@ end
 
 local function OnSave(inst, data)
     data.CanRun = inst.CanRun
-    data.NextFeedTime = GetTime() - inst.NextFeedTime
-    data.entrada = inst.entrada
+    data.feed_remaining = math.max(0, inst.NextFeedTime - GetTime())
 end
 
 local function OnLoad(inst, data)
-    if data.entrada then inst.entrada = data.entrada end
     if data then
-        inst.CanRun = data.CanRun or true
-        inst.NextFeedTime = data.NextFeedTime or 0
+        inst.CanRun = data.CanRun ~= false
+        inst.NextFeedTime = GetTime() + (data.feed_remaining or 0)
     end
 end
 
@@ -151,19 +150,7 @@ local function OnEntitySleep(inst)
 end
 
 local function OnDeadTiger(inst)
-    local x, y, z = inst.Transform:GetLocalPosition()
-    inst:DoTaskInTime(50 * FRAMES, function(inst)
-        if inst.entrada == nil then
-            local fx = SpawnPrefab("woodlegs_key3")
-            if fx then fx.Transform:SetPosition(x, y, z) end
-            inst.entrada = 1
-        end
-    end)
-
-    local spawner = SpawnPrefab("tigershark_spawner")
-    if spawner then
-        spawner.Transform:SetPosition(x, y, z)
-    end
+    TheWorld.components.tigersharker:OnBossDeath(inst)
 end
 
 local function fn()
@@ -286,6 +273,10 @@ local function fn()
 
 
     inst:SetBrain(brain)
+
+    if not TheWorld.components.tigersharker:RegisterBoss(inst) then
+        inst:DoTaskInTime(0, inst.Remove)
+    end
 
     return inst
 end

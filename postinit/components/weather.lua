@@ -1,3 +1,5 @@
+local RegionDefs = require("tools/regiondefs")
+
 AddComponentPostInit("weather", function(self)
     --Private
     local _world = TheWorld
@@ -101,6 +103,41 @@ AddComponentPostInit("weather", function(self)
         end
     end
 
+    local function GetLocalTropicalRainRate(player)
+        if player == nil then
+            return false, 0
+        end
+
+        if _ismastersim then
+            local climate = player.components.regionalclimate
+            if climate ~= nil and climate:IsTropical() then
+                return true, climate:GetPrecipitationRate() or 0
+            end
+        end
+
+        local is_shipwrecked = RegionDefs.HasPrimaryRegion(player, RegionDefs.PRIMARY.shipwrecked)
+        local is_hamlet = RegionDefs.HasPrimaryRegion(player, RegionDefs.PRIMARY.hamlet)
+        if not is_shipwrecked and not is_hamlet then
+            return false, 0
+        end
+
+        -- Tropical interiors and Volcano do not inherit exterior precipitation.
+        if player:HasTag(RegionDefs.INTERIOR_TAG) then
+            return true, 0
+        end
+
+        if is_shipwrecked and not RegionDefs.HasSubregion(player, RegionDefs.SUBREGION.sw_vanilla) then
+            return true, 0
+        end
+
+        local classified = player.player_classified
+        local snow_as_rain = classified ~= nil
+            and classified._regionalclimate_iswinterrain ~= nil
+            and classified._regionalclimate_iswinterrain:value()
+        return true, (_world.state.israining or snow_as_rain)
+            and (_world.state.precipitationrate or 0) or 0
+    end
+
     local function OnPlayerActivated(src, player)
         _activatedplayer = player
     end
@@ -132,15 +169,8 @@ AddComponentPostInit("weather", function(self)
 
         -- if not _world.state.issnowing then return end
 
-        local preciprate = _world.state.precipitationrate
-        -- local moisture = _world.state.moistureceil
-        local playerintropical = _activatedplayer and _activatedplayer:AwareInTropicalArea() and
-            not _activatedplayer:IsInHamRoom()
-        -- local playerinhamlet = _activatedplayer and _activatedplayer:AwareInHamletArea()
-        local winterrain = playerintropical and _world.state.issnowing
-        -- local winterfog = playerinhamlet and moisture > TUNING.FOG_MOISTURE_RATE
-
-        if winterrain then
+        local tropical, preciprate = GetLocalTropicalRainRate(_activatedplayer)
+        if tropical then
             if _rainfx then
                 _rainfx.particles_per_tick = 5 * preciprate
                 _rainfx.splashes_per_tick = 2 * preciprate
@@ -150,7 +180,7 @@ AddComponentPostInit("weather", function(self)
                 _snowfx.particles_per_tick = 0
             end
 
-            local preciprate_sound = winterrain and preciprate or nil
+            local preciprate_sound = preciprate > 0 and preciprate or nil
 
             if preciprate_sound ~= nil then
                 if _activatedplayer == nil then
@@ -182,6 +212,11 @@ AddComponentPostInit("weather", function(self)
                 else
                     StopAmbientRainSound()
                 end
+            else
+                StopAmbientRainSound()
+                StopTreeRainSound()
+                StopUmbrellaRainSound()
+                StopBarrierSound()
             end
         else
             if not (_world.state.israining or _world.state.islunarhailing) then

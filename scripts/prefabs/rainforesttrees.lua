@@ -264,19 +264,13 @@ local function dropBurr(inst)
 	end
 end
 
+local ClimateProfiles = require("tools/climateprofiles")
+
 local function OnSeasonChange(inst)
 	if not inst:HasTag("rotten") then
-		if TheWorld.state.iswinter then
-			stopbloom(inst)
-		end
-		if TheWorld.state.isspring then
+		if ClimateProfiles.IsHamletLush(TheWorld.state) then
 			startbloom(inst)
-		end
-
-		if TheWorld.state.issummer then
-			startbloom(inst)
-		end
-		if TheWorld.state.isautumn then
+		else
 			stopbloom(inst)
 		end
 	end

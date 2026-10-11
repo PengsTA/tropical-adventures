@@ -52,6 +52,7 @@ local desc_contents = {
             y_offset = 200,
             desc_tex = "curtain_door.tex",
             -- desc_atlas = "images/quagmire_recipebook.xml",
+            related_items = { "construction_permit", "demolition_permit", "curtain_door", "wood_door", "hammer" },
         },
 
         ruins = {
@@ -87,15 +88,20 @@ local desc_contents = {
             desc_anim = "erupt",
             resize = 0.15,
             y_offset = -70,
-            -- desc_tex = "volcano.tex",
             desc_atlas = sw_atlas,
+            related_items = { "volcano_altar", "obsidian", "dragoonheart", "coffeebeans" },
         },
 
         floods = {
             priority = 6,
-            y_offset = 200,
-            -- desc_tex = "volcano.tex",
-            desc_atlas = sw_atlas,
+            desc_build = "flood",
+            desc_bank = "flood",
+            desc_anim = "idle",
+            resize = 0.5,
+            y_offset = -30,
+            desc_tex = "sandbag_item.tex",
+            desc_atlas = "images/inventoryimages/inventory_shipwrecked.xml",
+            related_items = { "sandbag_item", "mosquito_poison" },
         },
 
         waves = {
@@ -111,10 +117,23 @@ local desc_contents = {
             desc_atlas = ham_atlas,
         },
 
+        bermudatriangle = {
+            priority = 9,
+            desc_build = "bermudatriangle",
+            desc_bank = "bermudatriangle",
+            desc_anim = "idle_loop",
+            resize = 0.35,
+            y_offset = -40,
+            desc_tex = "bermudatriangle.tex",
+            desc_atlas = sw_atlas,
+        },
 
-
-
-
+        ocean_boundary = {
+            priority = 10,
+            y_offset = 200,
+            desc_tex = "waves.tex",
+            desc_atlas = sw_atlas,
+        },
     },
 
 
@@ -143,6 +162,7 @@ local desc_contents = {
             resize = 0.5,
             y_offset = -60,
             -- desc_tex = "small_ruins.tex"
+            related_items = { "construction_permit", "demolition_permit", "curtain_door", "wood_door" },
         },
 
         pig_palace = {
@@ -329,8 +349,51 @@ local desc_contents = {
             },
         },
 
+        seaworthy = {
+            priority = 28,
+            desc_build = "portal_shipwrecked_build",
+            desc_bank = "boatportal",
+            desc_anim = "idle_on",
+            resize = 0.4,
+            y_offset = -50,
+            desc_atlas = "images/inventoryimages/inventory_shipwrecked.xml",
+            desc_tex = "shipwrecked_entrance.tex",
+            related_items = { "nightmarefuel", "livinglog", "sunken_boat_trinket_4", "transistor", "gears" },
+        },
 
+        skyworthy = {
+            priority = 29,
+            desc_build = "portal_hamlet_build",
+            desc_bank = "hamportal",
+            desc_anim = "idle_on",
+            resize = 0.4,
+            y_offset = -50,
+            desc_atlas = "images/inventoryimages/inventory_hamlet.xml",
+            desc_tex = "portal_ham.tex",
+            related_items = { "nightmarefuel", "livinglog", "trinket_giftshop_4", "transistor", "gears" },
+        },
 
+        sprinkler = {
+            priority = 30,
+            desc_build = "sprinkler",
+            desc_bank = "sprinkler",
+            desc_anim = "idle_off",
+            resize = 0.5,
+            y_offset = -40,
+            desc_tex = "sprinkler.tex",
+            related_items = { "ice", "alloy", "bluegem" },
+        },
+
+        volcano_altar = {
+            priority = 31,
+            desc_build = "volcano_altar",
+            desc_bank = "volcano_altar",
+            desc_anim = "idle_close",
+            resize = 0.4,
+            y_offset = -50,
+            desc_tex = "volcano_altar.tex",
+            related_items = { "obsidian", "monstermeat", "bird_egg" },
+        },
     },
 
     ------------------------------------------------
@@ -351,6 +414,7 @@ local desc_contents = {
             speed = 0.5,
             y_offset = -80,
             desc_atlas = sw_atlas,
+            related_items = { "sunken_boat_trinket_4" },
 
             -- desc_tex = "mant_queen.tex"
         },
@@ -664,19 +728,31 @@ local desc_contents = {
             desc_atlas = "images/quagmire_recipebook.xml",
         },
 
-        -- pig_eskimo = {
-        --     priority = 26,
-        --     desc_build = "pig_eskimo",
-        --     desc_bank = "townspig",
-        --     desc_anim = "idle_loop",
-        --     resize = 1,
-        --     y_offset = -50,
-        --     related_items = { "fish2_alive", "fish3_alive", "fish4_alive", "oceanfish_small_1_inv" },
-        --     oversymbolfn = function(item_anim)
-        --         item_anim:GetAnimState():Hide("ARM_carry")
-        --     end,
-        -- },
+        tigershark = {
+            priority = 28,
+            friendly = false,
+            desc_build = "tigershark_ground_build",
+            desc_bank = "tigershark",
+            desc_anim = "idle",
+            resize = 0.35,
+            speed = 0.6,
+            y_offset = -60,
+            desc_tex = "tigershark.tex",
+            related_items = { "shark_gills", "fish" },
+        },
 
+        doydoy = {
+            priority = 29,
+            friendly = true,
+            desc_build = "doydoy_adult_build",
+            desc_bank = "doydoy",
+            desc_anim = "idle",
+            resize = 0.6,
+            speed = 0.8,
+            y_offset = -40,
+            desc_tex = "doydoy.tex",
+            related_items = { "doydoyegg", "doydoyfeather", "doydoynest" },
+        },
     },
 
     ------------------------------------------------
@@ -692,7 +768,8 @@ local desc_contents = {
             desc_anim = "run_loop",
             y_offset = 30,
             resize = 0.8,
-            desc_tex = "cargoboat.tex"
+            desc_tex = "cargoboat.tex",
+            related_items = { "boatrepairkit", "boatlantern", "boatcannon", "sail", "trawlnet", "quackeringram" },
         },
 
         boat = {
@@ -700,20 +777,94 @@ local desc_contents = {
             type = "道具",
 
             y_offset = 200,
-            desc_tex = "boat.tex"
+            desc_tex = "boat.tex",
+        },
+
+        trawlnet = {
+            priority = 4,
+            type = "道具",
+            desc_build = "swap_trawlnet",
+            desc_bank = "trawlnet",
+            desc_anim = "idle",
+            resize = 0.9,
+            desc_tex = "trawlnet.tex",
+            related_items = { "lobster", "jellyfish", "rainbowjellyfish", "oceanfish_small_1_inv", "bullkelp_root", "seaweed_stalk" },
         },
 
         smelter = {
-            priority = 3,
+            priority = 5,
             type = "道具",
             desc_build = "smelter",
             desc_bank = "smelter",
             desc_anim = "idle_empty",
             facing = "fixed",
             y_offset = -10,
-            resize = 0.8
+            resize = 0.8,
         },
 
+        quackeringram = {
+            priority = 6,
+            type = "道具",
+            desc_build = "swap_quackeringram",
+            desc_bank = "quackeringram",
+            desc_anim = "idle",
+            resize = 0.7,
+            y_offset = 0,
+            desc_tex = "quackeringram.tex",
+            related_items = { "horn", "gears" },
+        },
+
+        boatcannon = {
+            priority = 7,
+            type = "道具",
+            desc_build = "swap_cannon",
+            desc_bank = "cannon",
+            desc_anim = "idle",
+            resize = 0.7,
+            y_offset = 0,
+            desc_tex = "boatcannon.tex",
+            related_items = { "obsidian_boatcannon", "gunpowder" },
+        },
+
+        boatlantern = {
+            priority = 8,
+            type = "道具",
+            desc_build = "swap_lantern_boat",
+            desc_bank = "lantern_boat",
+            desc_anim = "idle",
+            resize = 0.8,
+            y_offset = 0,
+            desc_tex = "boatlantern.tex",
+            related_items = { "boattorch", "bottlelantern" },
+        },
+
+        sail = {
+            priority = 9,
+            type = "道具",
+            desc_build = "swap_sail",
+            desc_bank = "sail",
+            desc_anim = "idle",
+            resize = 0.8,
+            y_offset = 0,
+            desc_tex = "sail.tex",
+            related_items = { "clothsail", "snakeskinsail", "feathersail", "ironwind" },
+        },
+
+        key_to_city = {
+            priority = 10,
+            type = "道具",
+            y_offset = 200,
+            desc_tex = "key_to_city.tex",
+            related_items = { "city_hammer", "playerhouse_city" },
+        },
+
+        city_hammer = {
+            priority = 11,
+            type = "道具",
+            y_offset = 200,
+            desc_tex = "city_hammer.tex",
+            related_items = { "key_to_city", "hammer" },
+        },
     },
 
 

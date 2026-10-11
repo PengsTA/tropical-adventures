@@ -3,7 +3,7 @@ local snowball = require("components/snowballmanager")
 local _TryToCreateSnowballAtPoint = snowball.TryToCreateSnowballAtPoint
 
 function snowball:TryToCreateSnowballAtPoint(x, y, z, skipsnowballtest)
-    if TheWorld.Map:IsTropicalAreaAtPoint(x, y, z) then
+    if not TheWorld.Map:IsDSTRegionAtPoint(x, y, z) then
         return false
     end
     return _TryToCreateSnowballAtPoint(self, x, y, z, skipsnowballtest)
@@ -14,7 +14,7 @@ AddPrefabPostInit("snowball_item", function(inst)
         return
     end
     inst:DoTaskInTime(0, function()
-        if not inst:IsInForestArea() then
+        if not inst:IsInPrimaryRegion("dst") or inst:IsOutsideWorld() then
             inst:Remove()
         end
     end)

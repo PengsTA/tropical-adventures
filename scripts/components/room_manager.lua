@@ -75,7 +75,6 @@ function RoomManager:SpawnInteriorWalls()
 		self:DespawnInteriorWalls()
 		local x, y, z = self.room.Transform:GetWorldPosition()
 		--和墙的位置进行匹配
-		x, z = math.floor(x) + 0.5, math.floor(z) + 0.5
 		local str = tostring((self.room.level) * 4 + 2) .. "x" .. tostring((self.room.level) * 4 + 2)
 		for _, v in pairs(BM.Rectangle(str, true)) do
 			local part = SpawnPrefab(self.room.wall)

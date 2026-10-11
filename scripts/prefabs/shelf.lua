@@ -1,4 +1,5 @@
 --------------------重新加载之后敲了之后放置物品的动画会消失。。
+local FixtureDemolition = require "tools/interior_fixture_demolition"
 local assets =
 {
     --Asset("ANIM", "anim/store_items.zip"),
@@ -43,9 +44,12 @@ end
 
 local scale_made = 0.9
 
-local function setPlayerUncraftable(inst)
+local function EnableInteriorDemolition(inst)
+    if inst._ta_interior_demolition_enabled then
+        return
+    end
+    inst._ta_interior_demolition_enabled = true
     inst:AddTag("playercrafted")
-    inst.Transform:SetScale(scale_made, scale_made, scale_made)
 
     inst:RemoveTag("NOCLICK")
     inst:AddComponent("lootdropper")
@@ -62,6 +66,11 @@ local function setPlayerUncraftable(inst)
                 smash(inst)
             end
         end)
+end
+
+local function setPlayerUncraftable(inst)
+    EnableInteriorDemolition(inst)
+    inst.Transform:SetScale(scale_made, scale_made, scale_made)
 end
 
 local function onBuilt(inst)
@@ -187,6 +196,7 @@ local function onsave(inst, data)
     if inst:HasTag("playercrafted") then
         data.playercrafted = true
     end
+    data.interior_demolition = inst._ta_interior_demolition_enabled or nil
 
     data.shelves = {}
     if inst.shelves then
@@ -213,6 +223,11 @@ local function onload(inst, data)
     end
     if data.playercrafted then
         inst:AddTag("playercrafted")
+    end
+    if data.interior_demolition then
+        EnableInteriorDemolition(inst)
+    elseif data.playercrafted and not data.onbuilt then
+        FixtureDemolition.RecoverPlayerFixture(inst)
     end
     if data.destrancado then
         inst.destrancado = data.destrancado
@@ -309,6 +324,7 @@ local function common(setsize, swp_img_list, locked, physics_round)
 
     inst.OnSave = onsave
     inst.OnLoad = onload
+    inst.EnableInteriorDemolition = EnableInteriorDemolition
     inst.OnLoadPostPass = onloadpostpass
 
     inst:DoTaskInTime(0, function()
@@ -374,6 +390,12 @@ local function marble()
     -----inst.AnimState:SetLayer(LAYER_WORLD_BACKGROUND)
     -----inst.AnimState:SetSortOrder(3)
     inst.shelfitems = { { 3, "petals" }, { 4, "petals" }, { 5, "petals" }, { 6, "petals" } }
+    return inst
+end
+
+local function metal()
+    local inst = common()
+    inst.AnimState:PlayAnimation("metalcrates", false)
     return inst
 end
 
@@ -989,7 +1011,8 @@ return
     Prefab("shelves_woodpalace", wood3, assets, prefabs),
     Prefab("shelves_basic", basic, assets, prefabs),
     Prefab("shelves_marble", marble, assets, prefabs),
-    Prefab("shelves_marble", marble2, assets, prefabs),
+    Prefab("shelves_marble2", marble2, assets, prefabs),
+    Prefab("shelves_metal", metal, assets, prefabs),
     Prefab("shelves_glass", glass, assets, prefabs),
     Prefab("shelves_ladder", ladder, assets, prefabs),
     Prefab("shelves_hutch", hutch, assets, prefabs),

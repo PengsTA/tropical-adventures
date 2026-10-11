@@ -133,7 +133,7 @@ local function fn(Sim)
     inst.components.periodicspawner:SetSpawnTestFn(CanSpawn)
     inst.components.periodicspawner:SetDensityInRange(20, 6)
     inst.components.periodicspawner:SetOnlySpawnOffscreen(true)
-    --    inst.components.periodicspawner:Start()
+    inst.components.periodicspawner:Start()
 
     inst.RefreshHomeTreeFn = RefreshHomeTree
     inst.RefreshHomeTreeTask = inst:DoPeriodicTask(5, RefreshHomeTree)

@@ -1,158 +1,107 @@
-local CHECK_RADIUS               = 60
-local CHECK_RADIUS_SAME_CREATURE = 60
-local SCREEN_DIST                = 50
-local creaturedef                = require("datadefs/creature_spawn_defs")
+local Definitions = require("datadefs/creature_spawn_defs")
+local CHECK_RADIUS = 60
+local SCREEN_DISTANCE = 50
+local MIN_DELAY, MAX_DELAY = 5, 10
+local MAX_SPAWN_ATTEMPTS = 12
+local BLOCKER_TAGS = { "tropicalspawnblocker" }
+local PLAYER_TAGS = { "player" }
+local IGNORE_TAGS = { "INLIMBO" }
 
 return Class(function(self, inst)
-	assert(TheWorld.ismastersim, "SchoolSpawner should not exist on client")
+    assert(TheWorld.ismastersim, "CreatureSpawner should not exist on client")
+    self.inst = inst
+    local tasks = {}
+    local map = TheWorld.Map
+    local removed = false
 
-	--------------------------------------------------------------------------
-	--[[ Member variables ]]
-	--------------------------------------------------------------------------
+    local function SpawnForPlayer(player, reschedule)
+        tasks[player] = nil
+        if removed or not player:IsValid() then return end
+        local info = self:GetSpawnPointInfo(player:GetPosition())
+        if info ~= nil then self:SpawnSchool(info) end
+        reschedule(player)
+    end
 
-	--Public
-	self.inst = inst
+    local function ScheduleSpawn(player)
+        if not removed and player:IsValid() and tasks[player] == nil then
+            tasks[player] = player:DoTaskInTime(GetRandomMinMax(MIN_DELAY, MAX_DELAY), SpawnForPlayer, ScheduleSpawn)
+        end
+    end
 
-	--Private
-	local _scheduledtasks = {}
-	local _world = TheWorld
-	local _map = _world.Map
+    local function OnPlayerJoined(_, player)
+        ScheduleSpawn(player)
+    end
 
-	--------------------------------------------------------------------------
-	--[[ Private member functions ]]
-	--------------------------------------------------------------------------
-	local TEMPOMINIMO = 5
-	local TEMPOMAXIMO = 10
+    local function OnPlayerLeft(_, player)
+        if tasks[player] ~= nil then
+            tasks[player]:Cancel()
+            tasks[player] = nil
+        end
+    end
 
-	local function SpawnSchoolForPlayer(player, reschedule)
-		--print("SpawnSchoolForPlayer")
-		local spawninfo = self:GetSpawnPointInfo(player:GetPosition())
-		if spawninfo ~= nil then
-			self:SpawnSchool(spawninfo)
-		end
+    inst:ListenForEvent("ms_playerjoined", OnPlayerJoined, TheWorld)
+    inst:ListenForEvent("ms_playerleft", OnPlayerLeft, TheWorld)
 
-		_scheduledtasks[player] = nil
-		reschedule(player)
-	end
+    function self:OnPostInit()
+        for _, player in ipairs(AllPlayers) do ScheduleSpawn(player) end
+    end
 
-	local function ScheduleSpawn(player)
-		if _scheduledtasks[player] == nil then
-			_scheduledtasks[player] = player:DoTaskInTime(GetRandomMinMax(TEMPOMINIMO, TEMPOMAXIMO), SpawnSchoolForPlayer,
-				ScheduleSpawn)
-		end
-	end
+    function self:OnRemoveFromEntity()
+        removed = true
+        for player in pairs(tasks) do OnPlayerLeft(nil, player) end
+        inst:RemoveEventCallback("ms_playerjoined", OnPlayerJoined, TheWorld)
+        inst:RemoveEventCallback("ms_playerleft", OnPlayerLeft, TheWorld)
+    end
 
-	local function CancelSpawn(player)
-		if _scheduledtasks[player] ~= nil then
-			_scheduledtasks[player]:Cancel()
-			_scheduledtasks[player] = nil
-		end
-	end
+    function self:GetSpawnPointInfo(position)
+        local info
+        local offset = FindValidPositionByFan(math.random() * TWOPI, SCREEN_DISTANCE, 40, function(delta)
+            local point = position + delta
+            local tile = map:GetTileAtPoint(point:Get())
+            local choices = Definitions.tiles[tile]
+            local name = choices ~= nil and weighted_random_choice(choices) or nil
+            local definition = name ~= nil and Definitions.creatures[name] or nil
+            if definition ~= nil and map:GetPlatformAtPoint(point.x, point.z) == nil
+                and #TheSim:FindEntities(point.x, point.y, point.z, CHECK_RADIUS, BLOCKER_TAGS) == 0
+                and #TheSim:FindEntities(point.x, point.y, point.z, SCREEN_DISTANCE, PLAYER_TAGS) == 0 then
+                info = { spawnpoint = point, tile = tile, schooldata = definition }
+                return true
+            end
+            return false
+        end)
+        return offset ~= nil and info or nil
+    end
 
-
-
-	--------------------------------------------------------------------------
-	--[[ Private event handlers ]]
-	--------------------------------------------------------------------------
-
-	local function OnPlayerJoined(src, player)
-		--print("player joined")
-		ScheduleSpawn(player)
-	end
-
-	local function OnPlayerLeft(src, player)
-		CancelSpawn(player)
-	end
-
-	--------------------------------------------------------------------------
-	--[[ Initialization ]]
-	--------------------------------------------------------------------------
-
-	--Register events
-	inst:ListenForEvent("ms_playerjoined", OnPlayerJoined, TheWorld)
-	inst:ListenForEvent("ms_playerleft", OnPlayerLeft, TheWorld)
-
-	--------------------------------------------------------------------------
-	--[[ Public member functions ]]
-	--------------------------------------------------------------------------
-
-	local function PickSchool(tile)
-		-- --print("PickSchool")
-		local school_choices = creaturedef.tiles[tile]
-		local schooltype = school_choices and weighted_random_choice(school_choices) or nil
-		return schooltype ~= nil and creaturedef.creatures[schooltype] or nil
-	end
-
-	function self:GetSpawnPointInfo(pt) -----------要保证玩家有一段距离
-		--print("GetSpawnPointInfo")
-
-		local spt, tile, schooldata
-		local function TestSpawnPoint(offset)
-			spt = pt + offset
-			tile = _map:GetTileAtPoint(spt:Get())
-			schooldata = PickSchool(tile)
-			if schooldata and #TheSim:FindEntities(spt.x, spt.y, spt.z, CHECK_RADIUS, { "tropicalspawnblocker" }) <= 0
-				and #TheSim:FindEntities(spt.x, spt.y, spt.z, SCREEN_DIST, { "player" }) <= 0 then
-				return true
-			end
-		end
-
-		local theta = math.random() * 2 * PI
-		local resultoffset = FindValidPositionByFan(theta, SCREEN_DIST, 40, TestSpawnPoint) or nil
-		------这个函数也要改
-		if resultoffset ~= nil then
-			return { spawnpoint = spt, tile = tile, schooldata = schooldata }
-		end
-	end
-
-	local function DoSpawnCreature(prefab, pos, rot, herd)
-		--print("DoSpawnCreature")
-		local creature = SpawnPrefab(prefab)
-		if creature then
-			creature.Transform:SetPosition(pos:Get())
-			-- creature:AddTag("spawned_" .. prefab)
-			--print("Spawn creature " .. prefab)
-		end
-	end
-
-	function self:SpawnSchool(spawninfo)
-		local schooldata = spawninfo.schooldata
-		local spawnpoint = spawninfo.spawnpoint
-		local tile = spawninfo.tile
-
-		--print("SpawnSchool")
-		local prefab = schooldata.prefab
-		local checkname = schooldata.checkname or schooldata.prefab
-		local num_creature = #TheSim:FindEntities(spawnpoint.x, spawnpoint.y, spawnpoint.z, CHECK_RADIUS_SAME_CREATURE,
-			{ "spawned_" .. checkname })
-
-		if schooldata.schoolmin < num_creature then
-			return
-		end
-		local schoolsize = math.random(schooldata.schoolmin, schooldata.schoolmax)
-		local rotation = math.random() * 360
-
-
-		local spawnsize = 0
-		while spawnsize + num_creature < schoolsize do
-			local radius = math.sqrt(math.random()) * schooldata.schoolrange
-			local angle = math.random() * 360
-
-			local offset
-			if IsLandTile(tile) then
-				offset = FindWalkableOffset(spawnpoint, angle, radius, 12)
-			elseif IsOceanTile(tile) then
-				offset = FindSwimmableOffset(spawnpoint, angle, radius, 12)
-			end
-			if offset then
-				DoSpawnCreature(prefab, spawnpoint + offset, rotation)
-				spawnsize = spawnsize + 1
-			end
-		end
-		SpawnPrefab("tropicalspawnblocker").Transform:SetPosition(spawnpoint:Get())
-	end
-
-	--------------------------------------------------------------------------
-	--[[ End ]]
-	--------------------------------------------------------------------------
+    function self:SpawnSchool(info)
+        local definition, point, tile = info.schooldata, info.spawnpoint, info.tile
+        local tag = "spawned_" .. (definition.checkname or definition.prefab)
+        local count = #TheSim:FindEntities(point.x, point.y, point.z, CHECK_RADIUS, { tag }, IGNORE_TAGS)
+        if count >= definition.schoolmax or count > definition.schoolmin then return 0 end
+        local missing = math.random(definition.schoolmin, definition.schoolmax) - count
+        local spawned = 0
+        -- Failed offsets and missing prefabs must also consume an attempt.
+        for _ = 1, MAX_SPAWN_ATTEMPTS do
+            if spawned >= missing then break end
+            local radius = math.sqrt(math.random()) * definition.schoolrange
+            local angle = math.random() * TWOPI
+            local offset
+            if IsLandTile(tile) then
+                offset = FindWalkableOffset(point, angle, radius, 12)
+            elseif IsOceanTile(tile) then
+                offset = FindSwimmableOffset(point, angle, radius, 12)
+            end
+            if offset ~= nil then
+                local creature = SpawnPrefab(definition.prefab)
+                if creature == nil then break end
+                creature:AddTag(tag)
+                creature.Transform:SetPosition((point + offset):Get())
+                spawned = spawned + 1
+            end
+        end
+        if spawned > 0 then
+            local blocker = SpawnPrefab("tropicalspawnblocker")
+            if blocker ~= nil then blocker.Transform:SetPosition(point:Get()) end
+        end
+        return spawned
+    end
 end)

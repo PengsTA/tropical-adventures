@@ -21,17 +21,17 @@ AddComponentPostInit("hounded", function(cmp)
             _spawndata.winter_prefab = "worm"
             _spawndata.summer_prefab = "worm"
             _spawndata.upgrade_spawn = "worm_boss"
-        elseif TheWorld.Map:IsCivilizedAreaAtPoint(x, 0, z) then
+        elseif TheWorld.Map:HasTopologyTagAtPoint(x, 0, z, "civilized") then
             _spawndata.base_prefab = " "
             _spawndata.winter_prefab = " "
             _spawndata.summer_prefab = " "
             _spawndata.upgrade_spawn = " "
-        elseif TheWorld.Map:IsHamletAreaAtPoint(x, 0, z) then
+        elseif TheWorld.Map:IsPrimaryRegionAtPoint(x, 0, z, "hamlet") then
             _spawndata.base_prefab = "circlingbat"
             _spawndata.winter_prefab = "circlingbat"
             _spawndata.summer_prefab = "circlingbat"
             _spawndata.upgrade_spawn = " "
-        elseif TheWorld.Map:IsShipwreckedAreaAtPoint(x, 0, z) then
+        elseif TheWorld.Map:IsPrimaryRegionAtPoint(x, 0, z, "shipwrecked") then
             _spawndata.base_prefab = "crocodog"
             _spawndata.winter_prefab = "watercrocodog"
             _spawndata.summer_prefab = "poisoncrocodog"

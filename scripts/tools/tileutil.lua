@@ -23,8 +23,8 @@ end
 
 function IsOnFlood(x, y, z)
     x, y, z = GetWorldPosition(x, y, z)
-    local _flood = TheWorld.components.flooding
-    return _flood ~= nil and _flood:OnFlood(x, y, z)
+    local floodmanager = TheWorld.components.floodmanager
+    return floodmanager ~= nil and floodmanager:IsFloodedAtPoint(x, z)
 end
 
 function IsOnOcean(x, y, z, onflood, ignoreboat)

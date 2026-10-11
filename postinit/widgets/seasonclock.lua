@@ -57,28 +57,43 @@ local seasonmap = {
     },
     sw = {
         autumn = "mild",
-        winter = "wet",
-        spring = "green",
+        winter = "hurricane",
+        spring = "monsoon",
         summer = "dry",
     },
     ham = {
         autumn = "temperate",
         winter = "humid",
-        spring = "lush",
+        spring = "rainy",
         summer = "lush",
     },
 }
+
+-- The bundled Shipwrecked strings use the original enum keys wet/green even
+-- though the climate API exposes their player-facing Hurricane/Monsoon names.
+-- Keep that translation detail at the UI boundary only.
+local seasonlabelkeys = {
+    hurricane = "WET",
+    monsoon = "GREEN",
+}
+
+local function GetRegionalSeasonLabel(profile, fallback)
+    if profile == "rainy" then
+        return TUNING.LANGUAGE_CHINESE and "雨季" or "Rainy"
+    end
+    return STRINGS.UI.SANDBOXMENU[seasonlabelkeys[profile] or string.upper(profile)] or fallback
+end
 
 AddClassPostConstruct(dir, function(self)
     local COLOURS = Upvaluehelper.GetUpvalue(self.OnSeasonLengthsChanged, "COLOURS")
 
     function self:ChangeRegion()
         if ThePlayer and TheWorld then
-            if ThePlayer:AwareInVolcanoArea() then
+            if ThePlayer:AwareInShipwreckedVolcanoRegion() then
                 tableutil.deep_merge(COLOURS, COLOUR_VOLCANO, true)
-            elseif ThePlayer:AwareInShipwreckedArea() then
+            elseif ThePlayer:AwareInShipwreckedRegion() then
                 tableutil.deep_merge(COLOURS, COLOUR_SW, true)
-            elseif ThePlayer:AwareInHamletArea() then
+            elseif ThePlayer:AwareInHamletRegion() then
                 tableutil.deep_merge(COLOURS, COLOUR_HAM, true)
             else
                 tableutil.deep_merge(COLOURS, COLOUR_ROG, true)
@@ -117,10 +132,10 @@ AddClassPostConstruct(dir, function(self)
         local str = GetSeasonString(self)
         if ThePlayer and TheWorld then
             local season = TheWorld.state.season
-            if ThePlayer:AwareInShipwreckedArea() then
-                str = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.sw[season])] or str
-            elseif ThePlayer:AwareInHamletArea() then
-                str = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.ham[season])] or str
+            if ThePlayer:AwareInShipwreckedRegion() then
+                str = GetRegionalSeasonLabel(seasonmap.sw[season], str)
+            elseif ThePlayer:AwareInHamletRegion() then
+                str = GetRegionalSeasonLabel(seasonmap.ham[season], str)
             end
         end
         if TheWorld.state.isaporkalypse then
@@ -163,10 +178,10 @@ local function HookSeasonBadge(self)
                         until season_length and season_length > 0
 
                         if ThePlayer and TheWorld then
-                            if ThePlayer:AwareInShipwreckedArea() then
-                                season = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.sw[season_trans[season_i]])] or season
-                            elseif ThePlayer:AwareInHamletArea() then
-                                season = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.ham[season_trans[season_i]])] or season
+                            if ThePlayer:AwareInShipwreckedRegion() then
+                                season = GetRegionalSeasonLabel(seasonmap.sw[season_trans[season_i]], season)
+                            elseif ThePlayer:AwareInHamletRegion() then
+                                season = GetRegionalSeasonLabel(seasonmap.ham[season_trans[season_i]], season)
                             end
                         end
                     end
@@ -177,10 +192,10 @@ local function HookSeasonBadge(self)
                     if focused then
                         if ThePlayer and TheWorld then
                             local season = TheWorld.state.season
-                            if ThePlayer:AwareInShipwreckedArea() then
-                                str = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.sw[season])] or str
-                            elseif ThePlayer:AwareInHamletArea() then
-                                str = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.ham[season])] or str
+                            if ThePlayer:AwareInShipwreckedRegion() then
+                                str = GetRegionalSeasonLabel(seasonmap.sw[season], str)
+                            elseif ThePlayer:AwareInHamletRegion() then
+                                str = GetRegionalSeasonLabel(seasonmap.ham[season], str)
                             end
                         end
                         if TheWorld.state.isaporkalypse then
@@ -201,10 +216,10 @@ local function HookSeasonBadge(self)
                         if season then
                             if ThePlayer and TheWorld then
                                 local world_season = TheWorld.state.season
-                                if ThePlayer:AwareInShipwreckedArea() then
-                                    season = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.sw[world_season])] or season
-                                elseif ThePlayer:AwareInHamletArea() then
-                                    season = STRINGS.UI.SANDBOXMENU[string.upper(seasonmap.ham[world_season])] or season
+                                if ThePlayer:AwareInShipwreckedRegion() then
+                                    season = GetRegionalSeasonLabel(seasonmap.sw[world_season], season)
+                                elseif ThePlayer:AwareInHamletRegion() then
+                                    season = GetRegionalSeasonLabel(seasonmap.ham[world_season], season)
                                 end
                             end
                             if TheWorld.state.isaporkalypse then

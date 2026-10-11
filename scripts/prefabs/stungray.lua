@@ -8,7 +8,6 @@ local assets =
 local prefabs =
 {
 	"venomgland",
-	"poisonbubble_short",
 	"monstermeat",
 	"splash_water",
 }

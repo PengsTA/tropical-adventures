@@ -13,7 +13,7 @@ function Autodartthrower:OnEntityWake()
 end
 
 function Autodartthrower:TurnOn()
-	if self.inst.components.disarmable.armed then
+	if not self.on and self.inst.components.disarmable.armed then
 		self.on = true
 		self.inst:StartUpdatingComponent(self)
 		if self.turnonfn then
@@ -23,6 +23,9 @@ function Autodartthrower:TurnOn()
 end
 
 function Autodartthrower:TurnOff()
+	if not self.on then
+		return
+	end
 	self.on = nil
 	self.inst:StopUpdatingComponent(self)
 	if self.turnofffn then

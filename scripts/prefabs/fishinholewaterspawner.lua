@@ -1,3 +1,4 @@
+local WaterSpawners = require("tools/water_spawners")
 local assets =
 {
 
@@ -8,7 +9,7 @@ local prefabs =
     "fishinhole",
 }
 
-local VALID_TILES = table.invert(
+local EXCLUDED_TILES = table.invert(
     {
         GROUND.MARSH,
     })
@@ -71,9 +72,8 @@ local function GetSpawnPoint(pt)
     local function TestSpawnPoint(offset)
         local spawnpoint = pt + offset
         local spawnpoint_x, spawnpoint_y, spawnpoint_z = (pt + offset):Get()
-        return not TheWorld.Map:IsAboveGroundAtPoint(spawnpoint:Get())
-            and not VALID_TILES[TheWorld.Map:GetTileAtPoint(spawnpoint:Get())] ~= nil and
-            not TheWorld.Map:IsPassableAtPoint(spawnpoint:Get()) and IsNotNextToLand(spawnpoint)
+        return WaterSpawners.IsWaterPoint(TheWorld.Map, spawnpoint, EXCLUDED_TILES)
+            and IsNotNextToLand(spawnpoint)
     end
 
     local theta = math.random() * 2 * PI

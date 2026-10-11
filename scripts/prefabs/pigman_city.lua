@@ -2,6 +2,8 @@ require "brains/pigguardbrain"
 require "brains/werepigbrain"
 require "stategraphs/SGpig_city"
 require "stategraphs/SGwerepig"
+local ClimateProfiles = require("tools/climateprofiles")
+local CityBribes = require("tools/city_bribes")
 
 local CityPigBrain = require "brains/citypigbrain"
 local RoyalPigGuardBrain = require "brains/royalpigguardbrain"
@@ -498,6 +500,15 @@ local function GiveRewards(inst, doer, rewards)
 end
 
 local function OnAccept(inst, doer, item)
+    local accepted, forgiven = CityBribes.Accept(inst, doer, item, OINC_VALUE[item.prefab],
+        inst:HasTag("guard") and GUARD_BRIBE_THRESHOLD or CIVILIAN_BRIBE_THRESHOLD)
+    if accepted then
+        item:Remove()
+        inst.sayline(inst, GetSpeechLine(inst, forgiven and STRINGS.CITY_PIG_TALK_FORGIVE_PLAYER
+            or STRINGS.CITY_PIG_TALK_NOT_ENOUGH))
+        return
+    end
+
     local items, rewards = CollectGivenItems(item)
 
     if inst:HasTag("guard") then
@@ -547,7 +558,7 @@ end
 --------------------------------------------------------------------------
 
 local function SpringMod(amt)
-    if TheWorld.state.isspring then
+    if ClimateProfiles.IsHamletRainy(TheWorld.state) then
         return amt * SPRING_COMBAT_MOD
     end
     return amt
@@ -724,29 +735,6 @@ end
 -- 收钱消气
 --------------------------------------------------------------------------
 
-local function OnItemReceived(inst, data)
-    local value = data.item and OINC_VALUE[data.item.prefab]
-    if not value or not inst:HasTag("angry_at_player") then
-        return
-    end
-
-    inst.bribe_count = ((inst.bribe_count or 0) + value) * data.item.components.stackable.stacksize
-
-    local bribe_threshold = inst:HasTag("guard") and GUARD_BRIBE_THRESHOLD or CIVILIAN_BRIBE_THRESHOLD
-    if inst.bribe_count >= bribe_threshold then
-        inst:RemoveTag("angry_at_player")
-
-        if inst.components.combat and inst.components.combat:IsTarget(GetPlayer()) then
-            inst.components.combat:GiveUp()
-        end
-
-        inst.bribe_count = 0
-        inst.sayline(inst, GetSpeechLine(inst, STRINGS.CITY_PIG_TALK_FORGIVE_PLAYER))
-    else
-        inst.sayline(inst, GetSpeechLine(inst, STRINGS.CITY_PIG_TALK_NOT_ENOUGH))
-    end
-end
-
 local function SetNormalPig(inst)
     inst:RemoveTag("werepig")
     inst:RemoveTag("guard")
@@ -780,8 +768,6 @@ local function SetNormalPig(inst)
             inst.tree_target = data.tree
         end
     end)
-
-    inst:ListenForEvent("itemreceived", OnItemReceived)
 
     inst.components.trader:Enable()
     inst.components.talker:StopIgnoringAll()

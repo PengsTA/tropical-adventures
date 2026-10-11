@@ -1,5 +1,8 @@
 -- this file function only for worldgen, in game use main/util.lua functions
 SpawnUtil = {}
+local SpawnRules = require("tools/worldgen_spawnrules")
+SpawnUtil.RegisterSpawnRule = SpawnRules.Register
+SpawnUtil.SetWorldgenLocation = SpawnRules.SetLocation
 
 function SpawnUtil.IsShoreTile(tile)
     return IsLandTile(tile) or tile == WORLD_TILES.MANGROVE or tile == WORLD_TILES.LILYPOND
@@ -28,34 +31,10 @@ function CheckTileType(tile, check, ...)
 end
 
 function SpawnUtil.IsSurroundedByTile(x, y, radius, tile)
-    local num_edge_points = math.ceil((radius * 2) / 4) - 1
-
-    -- test the corners first
-
-    if not CheckTileType(WorldSim:GetTile(x + radius, y + radius), tile) then return false end
-    if not CheckTileType(WorldSim:GetTile(x - radius, y + radius), tile) then return false end
-    if not CheckTileType(WorldSim:GetTile(x + radius, y - radius), tile) then return false end
-    if not CheckTileType(WorldSim:GetTile(x - radius, y - radius), tile) then return false end
-
-    -- if the radius is less than 1(2 after the +1), it won't have any edges to test and we can end the testing here.
-    if num_edge_points == 0 then return true end
-
-    local dist = (radius * 2) / (num_edge_points + 1)
-    -- test the edges next
-    for i = 1, num_edge_points do
-        local idist = dist * i
-        if not CheckTileType(WorldSim:GetTile(x - radius + idist, y + radius), tile) then return false end
-        if not CheckTileType(WorldSim:GetTile(x - radius + idist, y - radius), tile) then return false end
-        if not CheckTileType(WorldSim:GetTile(x - radius, y - radius + idist), tile) then return false end
-        if not CheckTileType(WorldSim:GetTile(x + radius, y - radius + idist), tile) then return false end
-    end
-
-    -- test interior points last
-    for i = 1, num_edge_points do
-        local idist = dist * i
-        for j = 1, num_edge_points do
-            local jdist = dist * j
-            if not CheckTileType(WorldSim:GetTile(x - radius + idist, y - radius + jdist), tile) then return false end
+    radius = math.ceil(radius or 1)
+    for dy = -radius, radius do
+        for dx = -radius, radius do
+            if not CheckTileType(WorldSim:GetTile(x + dx, y + dy), tile) then return false end
         end
     end
     return true
@@ -66,15 +45,10 @@ function SpawnUtil.IsSurroundedByWaterTile(x, y, radius)
 end
 
 function SpawnUtil.IsCloseToTile(x, y, radius, check)
-    radius = radius or 1
-    for i = -radius, radius do
-        if CheckTileType(WorldSim:GetTile(x - radius, y + i), check) or CheckTileType(WorldSim:GetTile(x + radius, y + i), check) then
-            return true
-        end
-    end
-    for i = -(radius - 1), radius - 1, 1 do
-        if CheckTileType(WorldSim:GetTile(x + i, y - radius), check) or CheckTileType(WorldSim:GetTile(x + i, y + radius), check) then
-            return true
+    radius = math.ceil(radius or 1)
+    for dy = -radius, radius do
+        for dx = -radius, radius do
+            if CheckTileType(WorldSim:GetTile(x + dx, y + dy), check) then return true end
         end
     end
     return false
@@ -114,81 +88,17 @@ function SpawnUtil.GetDistToSpawnPoint(x, y, ents)
     return SpawnUtil.GetShortestDistToPrefab(x, y, ents, "spawnpoint")
 end
 
-local commonspawnfn = {
-    spiderden = function(x, y, ents)
-        return not SpawnUtil.IsCloseToWaterTile(x, y, 5) and SpawnUtil.GetDistToSpawnPoint(x, y, ents) >= 100
-    end,
-    fishinhole = function(x, y, ents)
-        local tile = WorldSim:GetTile(x, y)
-        return (tile == WORLD_TILES.OCEAN_CORAL or tile == WORLD_TILES.MANGROVE or (IsOceanTile(tile) and not SpawnUtil.IsCloseToTile(x, y, 5, WORLD_TILES.OCEAN_SHALLOW))) and
-            SpawnUtil.IsSurroundedByWaterTile(x, y, 1)
-    end,
-    tidalpool = function(x, y, ents)
-        return not SpawnUtil.IsCloseToWaterTile(x, y, 2) and
-            SpawnUtil.GetShortestDistToPrefab(x, y, ents, "tidalpool") >= 3 * TILE_SCALE
-    end,
-
-    seashell_beached = function(x, y, ents)
-        return not SpawnUtil.IsCloseToWaterTile(x, y, 1) and SpawnUtil.IsCloseToWaterTile(x, y, 4)
-    end,
-    mangrovetree = function(x, y, ents)
-        return SpawnUtil.IsSurroundedByTile(x, y, 1, WORLD_TILES.MANGROVE)
-    end,
-    grass_water = function(x, y, ents)
-        return SpawnUtil.IsSurroundedByTile(x, y, 1, WORLD_TILES.MANGROVE)
-    end,
-}
-
 function SpawnUtil.SpawntestFn(prefab, x, y, ents)
-    return prefab ~= nil and (commonspawnfn[prefab] == nil or commonspawnfn[prefab](x, y, ents))
+    return SpawnRules.Test(prefab, x, y, ents)
 end
-
-local function surroundedbywater(x, y, ents)
-    return SpawnUtil.IsSurroundedByWaterTile(x, y, 1)
-end
-
-local function notclosetowater(x, y, ents)
-    return not SpawnUtil.IsCloseToWaterTile(x, y, 1)
-end
-
-local waterprefabs = {
-    "rock_coral", "seaweed_planted", "mussel_farm", "lobsterhole", "messagebottle", "messagebottleempty",
-    "shipwreck", "ballphinhouse"
-}
-
-local landprefabs = {
-    "livingjungletree", "volcano_shrub", "jungletree", "palmtree", "bush_vine", "rock_limpet", "sanddune", "sapling",
-    "poisonhole", "coffeebush", "elephantcactus",
-    "dragoonden", "wildborehouse", "mermhouse", "mermhouse_tropical", "magmarock", "magmarock_gold", "flower",
-    "fireflies", "grass", "charcoal",
-    "bambootree", "berrybush", "berrybush_snake", "berrybush2", "berrybush2_snake", "crabhole", "rock1", "rock2",
-    "rock_obsidian", "rock_charcoal", "skeleton",
-    "rock_flintless", "rocks", "flint", "goldnugget", "gravestone", "mound", "red_mushroom", "blue_mushroom",
-    "wallyintro_shipmast", "wallyintro_debris_1", "wallyintro_debris_2", "wallyintro_debris_3",
-    "green_mushroom", "carrot_planted", "beehive", "beequeenhive", "reeds", "marsh_tree", "snakeden", "pond",
-    "primeapebarrel",
-    "mandrake_planted", "mermhouse_fisher", "sweet_potato_planted", "flup", "flupspawner", "flupspawner_sparse",
-    "flupspawner_dense", "wasphive", "flower_evil", "crate", "tallbirdnest", "terrariumchest",
-    "marsh_bush", "deerspawningground",
-}
 
 -- Mod support
 function SpawnUtil.AddWaterCommonSpawn(prefab)
-    assert(commonspawnfn[prefab] == nil) -- don't replace an existing one
-    commonspawnfn[prefab] = surroundedbywater
+    SpawnRules.Register(prefab, { surface = "water" })
 end
 
 function SpawnUtil.AddLandCommonSpawn(prefab)
-    assert(commonspawnfn[prefab] == nil) -- don't replace an existing one
-    commonspawnfn[prefab] = notclosetowater
-end
-
-for i = 1, #waterprefabs do
-    SpawnUtil.AddWaterCommonSpawn(waterprefabs[i])
-end
-
-for i = 1, #landprefabs do
-    SpawnUtil.AddLandCommonSpawn(landprefabs[i])
+    SpawnRules.Register(prefab, { surface = "land" })
 end
 
 function SpawnUtil.AddEntityCheckFilter(prefab, ground)
@@ -205,33 +115,23 @@ function SpawnUtil.AddEntityCheckFilter(prefab, ground)
 end
 
 function SpawnUtil.AddEntity(prefab, ent_x, ent_y, entitiesOut, width, height, prefab_list, prefab_data, rand_offset, ...)
-    local x = (ent_x - width / 2.0) * TILE_SCALE
-    local y = (ent_y - height / 2.0) * TILE_SCALE
-
-    local tile = WorldSim:GetVisualTileAtPosition(ent_x, ent_y)
+    local tile = WorldSim:GetTile(ent_x, ent_y)
     if TileGroupManager:IsImpassableTile(tile) then
-        return
+        return false
     end
 
     if not SpawnUtil.AddEntityCheckFilter(prefab, tile) then
-        return
+        return false
     end
 
-    return PopulateWorld_AddEntity(prefab, ent_x, ent_y, tile, entitiesOut, width, height, prefab_list, prefab_data,
+    if not SpawnUtil.AddEntityCheck(prefab, ent_x, ent_y, entitiesOut) then return false end
+    PopulateWorld_AddEntity(prefab, ent_x, ent_y, tile, entitiesOut, width, height, prefab_list, prefab_data,
         rand_offset, ...)
+    return true
 end
 
 function SpawnUtil.AddEntityCheck(prefab, ent_x, ent_y, entitiesOut, spawnFns)
-    local spawn = true
-    if prefab ~= nil then
-        if spawnFns ~= nil and spawnFns[prefab] ~= nil then
-            spawn = spawnFns[prefab](ent_x, ent_y, entitiesOut)
-        else
-            spawn = SpawnUtil.SpawntestFn(prefab, ent_x, ent_y, entitiesOut)
-        end
-    end
-    --local spawn = prefab ~= nil and (spawnFns == nil or spawnFns[prefab] == nil or spawnFns[prefab](ent_x, ent_y, entitiesOut)) and SpawnUtil.SpawntestFn(prefab, ent_x, ent_y, entitiesOut)
-    return spawn
+    return SpawnRules.Test(prefab, ent_x, ent_y, entitiesOut, spawnFns)
 end
 
 function SpawnUtil.GetLayoutRadius(layout, prefabs)

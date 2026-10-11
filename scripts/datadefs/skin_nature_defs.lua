@@ -247,9 +247,9 @@ local natureskins = {
 
 
 local testfns = {
-    tropical = IsInTropicalArea,
-    shipwrecked = IsInShipwreckedArea,
-    hamlet = IsInHamletArea,
+    tropical = IsInTropicalRegion,
+    shipwrecked = IsInShipwreckedRegion,
+    hamlet = IsInHamletRegion,
 }
 
 

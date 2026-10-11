@@ -3,10 +3,13 @@ local assets =
     Asset("ANIM", "anim/wildbea_house.zip"),
 }
 
+local ShopRoomBuilder = require "tools/shop_room_builder"
+
 local prefabs =
 {
     "wildbeaver",
     "collapse_big",
+    "pig_shop_spears_room_builder",
 
     --loot:
     "boards",
@@ -291,6 +294,16 @@ local function OnActivate(inst, doer)
     end
 end
 
+local function on_spears_shop_save(inst, data)
+    data.interiorID = inst.interiorID
+end
+
+local function on_spears_shop_load(inst, data)
+    if data ~= nil then
+        inst.interiorID = data.interiorID
+    end
+end
+
 local function fn2()
     local inst = CreateEntity()
 
@@ -348,6 +361,10 @@ local function fn2()
     inst:AddComponent("inspectable")
 
     MakeSnowCovered(inst)
+
+    inst.OnSave = on_spears_shop_save
+    inst.OnLoad = on_spears_shop_load
+    inst:DoTaskInTime(0, ShopRoomBuilder.ScheduleForExterior)
 
     return inst
 end

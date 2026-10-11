@@ -178,16 +178,13 @@ AddComponentPostInit("playervision", function(self)
 
     local function OnEquipChanged(inst)
         local self = inst.components.playervision
-        if self.batvision == not inst.replica.inventory:EquipHasTag("batvision") then
-            self.batvision = not self.batvision
-            self:UpdateCCTable()
-        end
-        if self.heatvision == not inst.replica.inventory:EquipHasTag("heatvision") then
-            self.heatvision = not self.heatvision
-            self:UpdateCCTable()
-        end
-        if self.shootvision == not inst.replica.inventory:EquipHasTag("shootvision") then
-            self.shootvision = not self.shootvision
+        local inventory = inst.replica.inventory
+        if inventory == nil then return end
+        local batvision = inventory:EquipHasTag("batvision")
+        local heatvision = inventory:EquipHasTag("heatvision")
+        local shootvision = inventory:EquipHasTag("shootvision")
+        if self.batvision ~= batvision or self.heatvision ~= heatvision or self.shootvision ~= shootvision then
+            self.batvision, self.heatvision, self.shootvision = batvision, heatvision, shootvision
             self:UpdateCCTable()
         end
     end
@@ -210,18 +207,21 @@ AddComponentPostInit("playervision", function(self)
 
     local old_UpdateCCTable = self.UpdateCCTable
     function self:UpdateCCTable(...)
+        if self.RefreshInteriorVision ~= nil then
+            self:RefreshInteriorVision()
+        end
         if self.inst.replica.inventory and (self.inst.replica.inventory:EquipHasTag("heatvision")) then
-            --old_UpdateCCTable(self)
             local cctable = (self.batvision and BAT_COLOURCUBES)
                 or (self.heatvision and HEATVISION_COLOURCUBES)
                 or (self.shootvision and SHOOT_COLOURCUBES)
                 or nil
-            if cctable ~= self.currentcctable and cctable ~= nil then
-                self.currentcctable = cctable
-                self.inst:PushEvent("ccoverrides", cctable)
-            end
-        else
+            -- Let the native update restore phase callbacks and honour ghost vision.
+            local previous, blend = self.overridecctable, self.blendcctable
+            self.overridecctable, self.blendcctable = cctable, nil
             old_UpdateCCTable(self, ...)
+            self.overridecctable, self.blendcctable = previous, blend
+            return
         end
+        old_UpdateCCTable(self, ...)
     end
 end)

@@ -3,6 +3,19 @@ local GROUND = GLOBAL.GROUND
 local Layouts = require("map/layouts").Layouts
 local StaticLayout = require("map/static_layout")
 
+local chair_layouts = {
+	PigKingSeaworthy = { "pigking_seaworthy", { GROUND.GRASS, GROUND.FOREST, GROUND.ROAD, GROUND.WOODFLOOR, GROUND.CARPET } },
+	WildboreKingSeaworthy = { "wildboreking_seaworthy", { GROUND.JUNGLE, GROUND.BEACH, GROUND.ROAD, GROUND.WOODFLOOR, GROUND.SNAKESKINFLOOR } },
+}
+for name, definition in pairs(chair_layouts) do
+	local layout = StaticLayout.Get("map/static_layouts/" .. definition[1], {
+		start_mask = GLOBAL.PLACE_MASK.NORMAL,
+		fill_mask = GLOBAL.PLACE_MASK.NORMAL,
+	})
+	layout.ground_types = definition[2]
+	Layouts[name] = layout
+end
+
 
 ----原有layout的改动
 if Layouts["Oasis"] and Layouts["Oasis"].layout and Layouts["Oasis"].layout.deciduoustree then
@@ -1886,12 +1899,12 @@ local layoutsToRemakeTiles =
 		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2 },
 		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2 },
 		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2 },
-		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2 },
-		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2 },
-		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2 },
-		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2 },
-		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2 },
-		{ 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2 },
+		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2 },
+		{ 2, 2, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2 },
+		{ 2, 2, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 },
+		{ 2, 2, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 },
+		{ 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2 },
+		{ 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2 },
 		{ 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2 },
 		{ 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2 },
 		{ 0, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2 },

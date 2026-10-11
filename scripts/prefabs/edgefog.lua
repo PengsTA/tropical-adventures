@@ -1,162 +1,93 @@
+local OceanWrap = require("tools/ocean_wrap")
 local TEXTURE = "levels/textures/ds_fog1.tex"
 local SHADER = "shaders/vfx_particle.ksh"
-local COLOUR_ENVELOPE_NAME = "edgefogcolourenvelope"
-local SCALE_ENVELOPE_NAME = "edgefogscaleenvelope"
-
-local assets =
-{
-    Asset("IMAGE", TEXTURE),
-    Asset("SHADER", SHADER),
-}
+local COLOUR_ENVELOPE = "ta_ocean_edgefog_colour"
+local SCALE_ENVELOPE = "ta_ocean_edgefog_scale"
+local LIFETIME = 5
+local assets = { Asset("IMAGE", TEXTURE), Asset("SHADER", SHADER) }
+local initialized = false
 
 local function InitEnvelopes()
-    EnvelopeManager:AddColourEnvelope(
-        COLOUR_ENVELOPE_NAME,
-        {
-            { 0,   { 1, 1, 1, 0 } },
-            { .1,  { 1, 1, 1, 1 } },
-            { .75, { 1, 1, 1, 1 } },
-            { 1,   { 1, 1, 1, 0 } },
-        }
-    )
-
-    local max_scale = 10
-    EnvelopeManager:AddVector2Envelope(
-        SCALE_ENVELOPE_NAME,
-        {
-            { 0, { 6, 6 } },
-            { 1, { max_scale, max_scale } },
-        }
-    )
-
-    InitEnvelopes = nil
+    if initialized then return end
+    initialized = true
+    EnvelopeManager:AddColourEnvelope(COLOUR_ENVELOPE, {
+        { 0, { .9, .9, .9, 0 } },
+        { .15, { .9, .9, .9, .85 } },
+        { .75, { .9, .9, .9, .85 } },
+        { 1, { .9, .9, .9, 0 } },
+    })
+    EnvelopeManager:AddVector2Envelope(SCALE_ENVELOPE, {
+        { 0, { 6, 6 } }, { 1, { 10, 10 } },
+    })
 end
-
-local MAPWRAPPER_EDGEFOG_RANGE = 12
-local MAX_NUM_PARTICLES = 1000
-local MAX_LIFETIME = 5
-local GROUND_HEIGHT = .4
-local EMITTER_RADIUS = 25
-local DESIRED_PARTICLES_PER_SECOND = 20
 
 local function fn()
     local inst = CreateEntity()
-
-    inst:AddTag("FX")
-    --[[Non-networked entity]]
-    --inst.entity:SetCanSleep(false)
-    if TheNet:GetIsClient() then
-        inst.entity:AddClientSleepable()
-    end
-    inst.persists = false
-
     inst.entity:AddTransform()
+    inst:AddTag("FX")
+    inst:AddTag("NOCLICK")
+    inst.persists = false
+    if TheNet:IsDedicated() then return inst end
+    inst.entity:SetCanSleep(false)
 
-    function inst:AddTarget(target)
-        self.target = target
-        self.entity:SetParent(target.entity)
-    end
-
-    -----------------------------------------------------
-    if TheNet:IsDedicated() then
-        return inst
-    end
-
-    if InitEnvelopes ~= nil then
-        InitEnvelopes()
-    end
-
-    local config =
-    {
-        texture = TEXTURE,
-        shader = SHADER,
-        max_num_particles = MAX_NUM_PARTICLES,
-        max_lifetime = MAX_LIFETIME,
-        SV =
-        {
-            { x = -1, y = 0, z = 1 },
-            { x = 1,  y = 0, z = 1 },
-        },
-        sort_order = 3,
-        colour_envelope_name = COLOUR_ENVELOPE_NAME,
-        scale_envelope_name = SCALE_ENVELOPE_NAME
-    }
-
+    InitEnvelopes()
     local effect = inst.entity:AddVFXEffect()
     effect:InitEmitters(1)
-    effect:SetRenderResources(0, config.texture, config.shader)
-    effect:SetMaxNumParticles(0, config.max_num_particles)
-    effect:SetMaxLifetime(0, config.max_lifetime)
-    effect:SetSpawnVectors(0,
-        config.SV[1].x, config.SV[1].y, config.SV[1].z,
-        config.SV[2].x, config.SV[2].y, config.SV[2].z
-    )
-    effect:SetSortOrder(0, config.sort_order)
-    effect:SetColourEnvelope(0, config.colour_envelope_name)
-    effect:SetScaleEnvelope(0, config.scale_envelope_name)
-    effect:SetRadius(0, EMITTER_RADIUS)
+    effect:SetRenderResources(0, resolvefilepath(TEXTURE), resolvefilepath(SHADER))
+    effect:SetMaxNumParticles(0, 256)
+    effect:SetMaxLifetime(0, LIFETIME)
+    effect:SetSpawnVectors(0, -1, 0, 1, 1, 0, 1)
+    effect:SetSortOrder(0, 3)
+    effect:SetLayer(0, LAYER_WORLD)
+    effect:SetColourEnvelope(0, COLOUR_ENVELOPE)
+    effect:SetScaleEnvelope(0, SCALE_ENVELOPE)
+    effect:SetBlendMode(0, BLENDMODE.Premultiplied)
+    effect:SetRadius(0, OceanWrap.FOG_VIEW_TILES * TILE_SCALE + 40)
 
-    -----------------------------------------------------
-
-    local function area_emitter()
-        if inst.target then
-            local px, py, pz = inst.target.Transform:GetWorldPosition()
-            local map = TheWorld.Map
-            local w, h = map:GetSize()
-            local halfw, halfh = 0.5 * w * TILE_SCALE, 0.5 * h * TILE_SCALE
-            local distx = math.min(halfw + px, halfw - px)
-            local distz = math.min(halfh + pz, halfh - pz)
-            local cloud_range = MAPWRAPPER_EDGEFOG_RANGE * TILE_SCALE
-            local min_range = cloud_range + 100
-            local range = 10 * TILE_SCALE
-
-            local getx = function(distx)
-                local x, z = 0, math.random(-range, range)
-                if px < 0 then
-                    x = -halfw + math.random(0, cloud_range) - px
-                else
-                    x = halfw - math.random(0, cloud_range) - px
-                end
-                return x, z
-            end
-
-            local getz = function(distz)
-                local x, z = math.random(-range, range), 0
-                if pz < 0 then
-                    z = -halfh + math.random(0, cloud_range) - pz
-                else
-                    z = halfh - math.random(0, cloud_range) - pz
-                end
-                return x, z
-            end
-
-            local x, z = 0, 0
-            if distx <= min_range and distz <= min_range then
-                if math.random() < 0.5 then
-                    x, z = getx(distx)
-                else
-                    x, z = getz(distz)
-                end
-            elseif distx <= min_range then
-                x, z = getx(distx)
-            else
-                x, z = getz(distz)
-            end
-
-            return x, z
+    local remaining = 0
+    local tick_time = TheSim:GetTickTime()
+    function inst:SetBoundary(bounds, player)
+        local x, _, z = player.Transform:GetWorldPosition()
+        if self.last_x ~= nil and (x - self.last_x)^2 + (z - self.last_z)^2 > 40^2 then
+            effect:ClearAllParticles(0)
+            remaining = 0
         end
+        self.bounds, self.last_x, self.last_z, self.player = bounds, x, z, player
+        self.Transform:SetPosition(x, 0, z)
     end
 
-    inst:AddComponent("emitter")
-    inst.components.emitter.config = config
-    inst.components.emitter.max_lifetime = MAX_LIFETIME
-    inst.components.emitter.ground_height = GROUND_HEIGHT
-    local tick_time = TheSim:GetTickTime()
-    inst.components.emitter.particles_per_tick = DESIRED_PARTICLES_PER_SECOND * tick_time
-    inst.components.emitter.area_emitter = area_emitter
-    inst.components.emitter:Emit()
-
-
+    EmitterManager:AddEmitter(inst, nil, function()
+        local bounds, player = inst.bounds, inst.player
+        if bounds == nil or player == nil or not player:IsValid() then return end
+        local x, _, z = player.Transform:GetWorldPosition()
+        -- Keep world axes: parenting to a turning sailor can rotate the fog band.
+        inst.Transform:SetPosition(x, 0, z)
+        local view = OceanWrap.FOG_VIEW_TILES * TILE_SCALE
+        local xnear = bounds.x - math.abs(x) <= view
+        local znear = bounds.z - math.abs(z) <= view
+        if not xnear and not znear then remaining = 0; return end
+        remaining = remaining + 20 * tick_time
+        while remaining >= 1 do
+            remaining = remaining - 1
+            local px, pz
+            local depth = (-OceanWrap.FOG_OUTSIDE_TILES
+                + math.random() * (OceanWrap.FOG_BAND_TILES + OceanWrap.FOG_OUTSIDE_TILES)) * TILE_SCALE
+            if xnear and (not znear or math.random() < .5) then
+                px = (x < 0 and -1 or 1) * (bounds.x - depth)
+                pz = z + (math.random() - .5) * 80
+            else
+                px = x + (math.random() - .5) * 80
+                pz = (z < 0 and -1 or 1) * (bounds.z - depth)
+            end
+            local distance = OceanWrap.Distance(bounds, px, pz)
+            -- Include the outer void to hide the water's end, but never cover land.
+            if distance >= -OceanWrap.FOG_OUTSIDE_TILES * TILE_SCALE
+                and (distance < OceanWrap.GUARD_TILES * TILE_SCALE
+                    or TheWorld.Map:IsOceanTileAtPoint(px, 0, pz)) then
+                effect:AddParticle(0, LIFETIME, px - x, .4, pz - z, .03, 0, .03)
+            end
+        end
+    end)
     return inst
 end
 

@@ -81,6 +81,7 @@ ARRAY_NEW =
     "VOLCANO_ENTRANCE",
     "VOLCANO",
     "VOLCANO_INNER",
+    "HAM_RUINS",
 }
 
 

@@ -71,6 +71,7 @@ local function fn()
     inst.MiniMapEntity:SetIcon("reeds.png")
 
     inst:AddTag("plant")
+    inst:AddTag("ignorewalkableplatforms")
 
     inst.AnimState:SetBank("grass_inwater")
     inst.AnimState:SetBuild("reeds_water_build")

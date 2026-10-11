@@ -1,3 +1,4 @@
+local DenPopulation = require("tools/den_population")
 local assets =
 {
     Asset("ANIM", "anim/ballphin_house.zip"),
@@ -40,7 +41,7 @@ local function LightsOff(inst)
 end
 
 local function getstatus(inst)
-    if inst.components.spawner and inst.components.spawner:IsOccupied() then
+    if inst.components.childspawner and inst.components.childspawner.childreninside > 0 then
         return "FULL"
     end
 end
@@ -85,7 +86,7 @@ local function onhammered(inst, worker)
         inst.doortask:Cancel()
         inst.doortask = nil
     end
-    if inst.components.spawner then inst.components.spawner:ReleaseChild() end
+    if inst.components.childspawner then inst.components.childspawner:ReleaseAllChildren() end
     inst.components.lootdropper:DropLoot()
     SpawnPrefab("collapse_big").Transform:SetPosition(inst.Transform:GetWorldPosition())
     inst.SoundEmitter:PlaySound("dontstarve/common/destroy_wood")
@@ -106,14 +107,14 @@ end
 local function OnDay(inst)
     --print(inst, "OnDay")
     if not inst:HasTag("burnt") then
-        if inst.components.spawner:IsOccupied() then
+        if inst.components.childspawner.childreninside > 0 then
             LightsOff(inst)
             if inst.doortask then
                 inst.doortask:Cancel()
                 inst.doortask = nil
             end
             inst.doortask = inst:DoTaskInTime(1 + math.random() * 2,
-                function() inst.components.spawner:ReleaseChild() end)
+                function() inst.components.childspawner:ReleaseAllChildren() end)
         end
     end
 end
@@ -166,13 +167,9 @@ local function fn(Sim)
     inst.components.workable:SetOnFinishCallback(onhammered)
     inst.components.workable:SetOnWorkCallback(onhit)
 
-    inst:AddComponent("spawner")
-    WorldSettings_Spawner_SpawnDelay(inst, TOTAL_DAY_TIME * 4, true)
-    inst.components.spawner:Configure("ballphin", TOTAL_DAY_TIME * 4)
-    inst.components.spawner.onoccupied = onoccupied
-    inst.components.spawner.onvacate = onvacate
-    inst.components.spawner:SetWaterSpawning(true, false)
-    inst:ListenForEvent("daytime", function() OnDay(inst) end, TheWorld)
+    local population = DenPopulation.Configure(inst, "ballphin", TUNING.TOTAL_DAY_TIME * 4, true, false)
+    population.onoccupied = onoccupied
+    population.onvacate = onvacate
 
     inst:AddComponent("playerprox")
     inst.components.playerprox:SetDist(10, 13)
@@ -192,8 +189,8 @@ local function fn(Sim)
         end
     end)
     inst:ListenForEvent("onignite", function(inst)
-        if inst.components.spawner then
-            inst.components.spawner:ReleaseChild()
+        if inst.components.childspawner then
+            inst.components.childspawner:ReleaseAllChildren()
         end
     end)
 
@@ -207,6 +204,13 @@ local function fn(Sim)
     end)
 
     inst:WatchWorldState("startcaveday", OnDay)
+    inst:WatchWorldState("isday", function(den, isday)
+        if isday then den.components.childspawner:StartSpawning()
+        else den.components.childspawner:StopSpawning() end
+    end)
+    inst:DoTaskInTime(0, function(den)
+        if TheWorld.state.isday then den.components.childspawner:StartSpawning() end
+    end)
 
     return inst
 end

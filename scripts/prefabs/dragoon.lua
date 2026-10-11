@@ -2,7 +2,6 @@ local trace = function() end
 
 local assets =
 {
-	Asset("ANIM", "anim/dragonfly_fx.zip"),
 	Asset("ANIM", "anim/dragoon_build.zip"),
 	Asset("ANIM", "anim/dragoon_basic.zip"),
 	Asset("ANIM", "anim/dragoon_actions.zip"),
@@ -15,10 +14,8 @@ local prefabs =
 	"firesplash_fx",
 	"firering_fx",
 	"dragoonfire",
-	"dragonfly_fx",
 	"dragoonspit",
 	"dragoonheart",
-	"dragoon_charge_fx",
 }
 
 SetSharedLootTable( 'dragoon',
@@ -92,10 +89,7 @@ local function GetReturnPos(inst)
 end
 
 local function DoReturn(inst)
-	--print("DoReturn", inst)
-	if inst.components.homeseeker and inst.components.homeseeker:HasHome() then
-		inst.components.homeseeker.home.components.spawner:GoHome(inst)
-	end
+	require("tools/home_return").ReturnOffscreen(inst)
 end
 
 local function OnNight(inst)

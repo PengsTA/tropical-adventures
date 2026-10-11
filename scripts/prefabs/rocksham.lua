@@ -38,7 +38,6 @@ local prefabs =
 	"rocks",
 	"nitre",
 	"flint",
-	"gold_nugget",
 	"bluegem",
 	"goldnugget",
 	"relic_3",
@@ -161,26 +160,17 @@ SetSharedLootTable('antqueen_throne',
 		--    {'gold_dust', 0.6},
 		--    {'gold_dust', 0.6},
 
-		{ 'gold_nugget', 1.0 },
-		{ 'gold_nugget', 1.0 },
-		{ 'gold_nugget', 0.3 },
-		{ 'gold_nugget', 0.3 },
+		{ 'goldnugget', 1.0 },
+		{ 'goldnugget', 1.0 },
+		{ 'goldnugget', 0.3 },
+		{ 'goldnugget', 0.3 },
 
 		{ 'bluegem',     0.5 },
 		{ 'bluegem',     0.5 },
 	})
 
 
-local function triggerdarts(inst)
-	--print("TRIGGER DARTS!")
-	local pt = Vector3(inst.Transform:GetWorldPosition())
-	local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 50, { "dartthrower" }, { "INTERIOR_LIMBO" })
-	for i, ent in ipairs(ents) do
-		if ent.shoot then
-			ent.shoot(ent)
-		end
-	end
-end
+local triggerdarts = require("tools/ruins_dart_triggers").Trigger
 local function setdislodged(inst)
 	inst.dislodged = true
 	inst:RemoveTag("dislodgeable")

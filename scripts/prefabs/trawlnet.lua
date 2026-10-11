@@ -1,3 +1,7 @@
+local TrawlHelper = require("tools/trawl_helper")
+local TrawlLoot = require("datadefs/trawl_loot_defs")
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local net_assets =
 {
     Asset("ANIM", "anim/swap_trawlnet.zip"),
@@ -17,273 +21,38 @@ local dropped_assets =
     Asset("ANIM", "anim/ui_chest_3x2.zip"),
 }
 
-local chance =
-{
-    verylow = 1,
-    low = 2,
-    medium = 4,
-    high = 8,
-}
-
-local TRAWLNET_MAX_ITEMS = 9       --Don't make this larger than 9 without talking to Dave
-local TRAWLNET_ITEM_DISTANCE = 100 --How far you have to travel to get another item
-local TRAWLING_SPEED_MULT = -0.25
+local TRAWLNET_MAX_ITEMS = TrawlLoot.max_items
+local TRAWLNET_ITEM_DISTANCE = TrawlLoot.item_distance or 120
+local TRAWL_FULL_SPEED_PENALTY = 0.75
 local TRAWL_SINK_TIME = 30 * 3
+local TRAWL_PICKUP_RADIUS = 2
+local TRAWL_CHECK_PERIOD = FRAMES * 5
+local TRAWL_SUCCESS_COOLDOWN = 1.5
+local TRAWL_SCAN_EXCLUDE_TAGS = { "FX", "INLIMBO", "ignoretrawlnettarget", "player" }
 
-local loot =
-{
-    shallow =
-    {
-        [1] = "seaweed",
-        [2] = "mussel",
-        [3] = "lobster_land",
-        [4] = "jellyfish",
-        [5] = "oceanfish_small_61_inv",
-        [6] = "coral",
-        [7] = "messagebottleempty_sw",
-        [8] = "dogfish_dead",
-        [9] = "rocks",
-        [10] = "roe",
-    },
+local function CleanInvalidContainerSlots(container_entity)
+    if container_entity == nil or not container_entity:IsValid() then
+        return
+    end
 
+    local container = container_entity.components and container_entity.components.container or nil
+    if container == nil then
+        return
+    end
 
-    medium =
-    {
-        [1] = "seaweed",
-        [2] = "mussel",
-        [3] = "lobster_land",
-        [4] = "jellyfish",
-        [5] = "oceanfish_small_61_inv",
-        [6] = "coral",
-        [7] = "dogfish_dead",
-        [8] = "messagebottleempty_sw",
-        [9] = "boneshard",
-        [10] = "spoiled_fish_large",
-        [11] = "dubloon",
-        [12] = "goldnugget",
-        [13] = "firestaff",
-        [14] = "icestaff",
-        [15] = "panflute",
-        [16] = "trinket_12",
-        [17] = "antliontrinket",
-        [18] = "trinket_sw_17",
-        [19] = "telescope",
-        [20] = "roe",
-    },
-
-    deep =
-    {
-        [1] = "seaweed",
-        [2] = "mussel",
-        [3] = "lobster_land",
-        [4] = "jellyfish",
-        [5] = "oceanfish_small_61_inv",
-        [6] = "coral",
-        [7] = "dogfish_dead",
-        [8] = "messagebottleempty_sw",
-        [9] = "boneshard",
-        [10] = "spoiled_fish_large",
-        [11] = "dubloon",
-        [12] = "goldnugget",
-        [13] = "spear",
-        [14] = "firestaff",
-        [15] = "icestaff",
-        [16] = "panflute",
-        [17] = "redgem",
-        [18] = "bluegem",
-        [19] = "purplegem",
-        [20] = "goldenshovel",
-        [21] = "goldenaxe",
-        [22] = "razor",
-        [24] = "compass",
-        [25] = "amulet",
-        [26] = "trinket_12",
-        [27] = "antliontrinket",
-        [28] = "trinket_sw_17",
-        [29] = "trident",
-        [30] = "roe",
-        [31] = "telescope",
-    }
-}
-
-local hurricaneloot =
-{
-    shallow =
-    {
-
-        --        {"roe", chance.medium},
-
-        { "seaweed",            chance.high },
-        { "mussel",             chance.medium },
-        { "lobster_land",       chance.medium },
-        { "jellyfish",          chance.medium },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "dogfish_dead",           chance.medium },
-        { "rocks",              chance.high },
-        { "dubloon",            chance.low },
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-    },
-
-
-    medium =
-    {
-        --         {"roe", chance.medium},
-
-        { "seaweed",            chance.high },
-        { "mussel",             chance.high },
-        { "lobster_land",       chance.medium },
-        { "jellyfish",          chance.high },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "dogfish_dead",           chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "boneshard",          chance.high },
-        { "spoiled_fish_large",       chance.high },
-        { "dubloon",            chance.medium },
-        { "goldnugget",         chance.medium },
-        --        {"telescope", chance.low},
-        --        {"firestaff", chance.low},
-        --        {"icestaff", chance.low},
-        --        {"panflute", chance.low},
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-        { "trinket_sw_18", chance.verylow},
-        { "trident_sw", chance.verylow},
-    },
-
-
-    deep =
-    {
-        --        {"roe", chance.low},
-
-        { "seaweed",            chance.high },
-        { "mussel",             chance.high },
-        { "lobster_land",       chance.low },
-        { "jellyfish",          chance.high },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "dogfish_dead",           chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "boneshard",          chance.high },
-        { "spoiled_fish_large",       chance.high },
-        { "dubloon",            chance.medium },
-        { "goldnugget",         chance.medium },
-        --        {"telescope", chance.medium},
-        --        {"firestaff", chance.low},
-        --        {"icestaff", chance.medium},
-        --        {"panflute", chance.medium},
-        --        {"redgem", chance.medium},
-        --        {"bluegem", chance.medium},
-        --        {"purplegem", chance.medium},
-        --        {"goldenshovel", chance.medium},
-        --        {"goldenaxe", chance.medium},
-        --        {"razor", chance.medium},
-        --        {"spear", chance.medium},
-        --        {"compass", chance.medium},
-        --        {"amulet", chance.verylow},
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-        { "trinket_sw_18", chance.verylow},
-        { "trident_sw", chance.verylow},
-    }
-}
-
-local dryloot =
-{
-    shallow =
-    {
-        { "seaweed",            chance.high },
-        { "mussel",             chance.high },
-        { "lobster_land",       chance.medium },
-        { "jellyfish",          chance.medium },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "dogfish_dead",           chance.medium },
-        { "rocks",              chance.high },
-        { "dubloon",            chance.low },
-        { "obsidian",           chance.high },
-    },
-
-
-    medium =
-    {
-        { "seaweed",            chance.high },
-        { "mussel",             chance.high },
-        { "lobster_land",       chance.medium },
-        { "jellyfish",          chance.high },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "dogfish_dead",           chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "boneshard",          chance.high },
-        { "spoiled_fish_large",       chance.high },
-        { "dubloon",            chance.medium },
-        { "goldnugget",         chance.medium },
-        { "telescope",          chance.low },
-        --        {"firestaff", chance.medium},
-        --        {"icestaff", chance.low},
-        --        {"panflute", chance.low},
-        --        {"obsidian", chance.medium},
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-        { "trinket_sw_18", chance.verylow},
-        { "trident_sw", chance.verylow},
-    },
-
-
-    deep =
-    {
-        { "seaweed",            chance.high },
-        { "mussel",             chance.high },
-        { "lobster_land",       chance.low },
-        { "jellyfish",          chance.high },
-        { "oceanfish_small_61_inv",               chance.high },
-        { "coral",              chance.high },
-        { "dogfish_dead",           chance.high },
-        { "messagebottleempty_sw", chance.high },
-        { "boneshard",          chance.high },
-        { "spoiled_fish_large",       chance.high },
-        { "dubloon",            chance.medium },
-        { "goldnugget",         chance.medium },
-        --        {"telescope", chance.medium},
-        --        {"firestaff", chance.medium},
-        --        {"icestaff", chance.low},
-        --        {"panflute", chance.medium},
-        --        {"redgem", chance.medium},
-        --        {"bluegem", chance.medium},
-        --        {"purplegem", chance.medium},
-        --        {"goldenshovel", chance.medium},
-        --        {"goldenaxe", chance.medium},
-        --        {"razor", chance.medium},
-        --        {"spear", chance.medium},
-        --        {"compass", chance.medium},
-        --        {"amulet", chance.verylow},
-        --        {"obsidian", chance.medium},
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-        { "trinket_sw_18", chance.verylow},
-        { "trident_sw", chance.verylow},
-    }
-}
-
-local uniqueItems =
-{
-        { "trinket_sw_16", chance.low},
-        { "trinket_sw_17", chance.low},
-        { "trinket_sw_18", chance.verylow},
-        { "trident_sw", chance.verylow},
-}
+    for slot, item in pairs(container.slots) do
+        if item == nil or not item:IsValid() then
+            container.slots[slot] = nil
+        end
+    end
+end
 
 local function getLootList(inst)
-    local loottable = loot
-    if TheWorld.state.iswinter then
-        loottable = hurricaneloot
-    elseif TheWorld.state.issummer then
-        loottable = dryloot
+    local loottable = TrawlLoot.loot.normal
+    if TheWorld.state.issummer then
+        loottable = TrawlLoot.loot.hurricane
+    elseif TheWorld.state.iswinter then
+        loottable = TrawlLoot.loot.dry
     end
 
 
@@ -300,186 +69,532 @@ local function getLootList(inst)
     end
 end
 
+local function HasTrawlLoot(inst, prefab)
+    local found = false
+    if inst.components.inventory ~= nil then
+        inst.components.inventory:ForEachItem(function(item)
+            if item.prefab == prefab then
+                found = true
+            end
+        end)
+    end
+    return found
+end
 
+local function NormalizeLootEntry(entry)
+    return type(entry) == "table" and entry[1] or entry, type(entry) == "table" and entry[2] or 1
+end
 
+local function SelectTrawlLoot(inst, list, depth)
+    local total = 0
+    local choices = {}
 
+    for _, entry in pairs(list) do
+        local prefab, weight = NormalizeLootEntry(entry)
+        if prefab ~= nil and weight ~= nil and weight > 0 then
+            if not TrawlLoot.unique[prefab] or not HasTrawlLoot(inst, prefab) then
+                total = total + weight
+                choices[#choices + 1] = { prefab = prefab, ceiling = total }
+            end
+        end
+    end
 
+    if total <= 0 then
+        return depth == "deep" and "boneshard" or "seaweed"
+    end
 
+    local roll = math.random() * total
+    for _, choice in ipairs(choices) do
+        if roll <= choice.ceiling then
+            return choice.prefab
+        end
+    end
 
+    return choices[#choices].prefab
+end
 
+local function GetTrawlBucket(inst)
+    local x, y, z = inst.Transform:GetWorldPosition()
+    local map = TheWorld.Map
+    local ground = map:GetTile(map:GetTileCoordsAtPoint(x, y, z))
+    if ground == GROUND.OCEAN_ROUGH then
+        return "deep"
+    elseif ground == GROUND.OCEAN_SWELL then
+        return "medium"
+    end
+    return "shallow"
+end
 
+local function RefreshTrawlVisual(inst)
+    local boat = BoatEquip.GetItemBoat(inst)
+    if boat ~= nil and boat.components.boatequipment ~= nil then
+        boat.components.boatequipment:UpdateVisuals()
+    end
+end
 
+local StopTrawling
 
+local function IsBehindSailor(sailor, target)
+    local sx, _, sz = sailor.Transform:GetWorldPosition()
+    local tx, _, tz = target.Transform:GetWorldPosition()
+    local dx = tx - sx
+    local dz = tz - sz
+    local distance_sq = dx * dx + dz * dz
+    if distance_sq < 1 then
+        return false
+    end
 
-local function droploot(inst)
-    if not inst then return end
-    --if inst.navio then inst.navio.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
-    --inst.navio = nil
-    if not inst:HasTag("usada") then return end
-    if not inst.navio then return end
+    local heading = -sailor.Transform:GetRotation() * DEGREES
+    return (dx * math.cos(heading) + dz * math.sin(heading)) <= 0
+end
+
+local function GetTrawlPoint(sailor)
+    local x, y, z = sailor.Transform:GetWorldPosition()
+    local angle = sailor.Transform:GetRotation() * DEGREES
+    return x - 3 * math.cos(angle), y, z + 3 * math.sin(angle)
+end
+
+local function CanTrawlItem(item)
+    local inventoryitem = item.components.inventoryitem
+    return inventoryitem ~= nil
+        and not inventoryitem:IsHeld()
+        and inventoryitem.cangoincontainer
+        and not (item:HasTag("FX") or item:HasTag("NOCLICK") or item:HasTag("trap") or item:HasTag("player"))
+end
+
+local function IsValidTrawlTargetEntity(target)
+    if target == nil or not target:IsValid() then
+        return false
+    end
+
+    if target.components ~= nil and target.components.pickable ~= nil
+        and not TrawlHelper.IsMusselCompatTarget(target)
+        and not TrawlHelper.IsKelpCompatTarget(target) then
+        return false
+    end
+
+    return true
+end
+
+local function GetTrawlCandidateType(target)
+    if not IsValidTrawlTargetEntity(target) then
+        return nil
+    end
+
+    if CanTrawlItem(target) then
+        return "floating"
+    end
+
+    if TrawlHelper.IsMusselCompatTarget(target) then
+        return not TrawlHelper.IsMatureMusselFarm(target) and "mussel_compat" or nil
+    end
+
+    if TrawlHelper.IsKelpCompatTarget(target) then
+        return "kelp_compat"
+    end
+
+    if TrawlHelper.IsRuntimeFishTarget(target) then
+        return target:HasTag("oceanfishable_creature") and "fishable_creatures" or "oceanfish"
+    end
+
+    if target:HasTag("trawltarget") or target.components ~= nil and target.components.trawlable ~= nil then
+        return "trawltargets"
+    end
+
+    return nil
+end
+
+local function GetDistanceSq(source_x, source_z, target)
+    if target == nil or not target:IsValid() then
+        return math.huge
+    end
+    local tx, _, tz = target.Transform:GetWorldPosition()
+    local dx = tx - source_x
+    local dz = tz - source_z
+    return dx * dx + dz * dz
+end
+
+local function EnsureTrawlableTargetForCategory(inst, target, category)
+    if not IsValidTrawlTargetEntity(target) then
+        return nil
+    end
+    if target.components == nil then
+        return nil
+    end
+
+    if category == "mussel_compat" then
+        return TrawlHelper.ConfigureMusselCompatTrawlable(target)
+    end
+
+    if category == "trawltargets" then
+        return target.components.trawlable
+    end
+
+    if category == "kelp_compat" then
+        return TrawlHelper.EnsureRuntimeKelpCompatTrawlable(inst, target)
+    end
+
+    if category == "fishable_creatures" or category == "oceanfish" then
+        return TrawlHelper.EnsureRuntimeFishTrawlable(inst, target)
+    end
+
+    return nil
+end
+
+local function CollectTrawlCandidates(inst, x, y, z)
+    local candidates = {}
+    local seen = {}
+
+    for _, target in ipairs(TheSim:FindEntities(x, y, z, TRAWL_PICKUP_RADIUS, nil, TRAWL_SCAN_EXCLUDE_TAGS)) do
+        if target ~= nil and seen[target] == nil then
+            seen[target] = true
+            local category = GetTrawlCandidateType(target)
+            if category ~= nil then
+                local candidate = {
+                    target = target,
+                    category = category,
+                    distance_sq = GetDistanceSq(x, z, target),
+                }
+                if category ~= "floating" then
+                    candidate.trawlable = EnsureTrawlableTargetForCategory(inst, target, category)
+                end
+
+                candidates[#candidates + 1] = candidate
+            end
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        return a.distance_sq < b.distance_sq
+    end)
+
+    return candidates
+end
+
+local function UpdateTrawlBuild(inst)
+    local inventory = inst.components.inventory
+    local fullness = inventory:NumItems() / inventory.maxslots
+    inst.build = fullness <= 0.33 and "swap_trawlnet"
+        or fullness <= 0.66 and "swap_trawlnet_half"
+        or "swap_trawlnet_full"
+    inst.sail_speed_mult = -TRAWL_FULL_SPEED_PENALTY * fullness
+    RefreshTrawlVisual(inst)
+end
+
+local function SpawnDroppedTrawlnet(inst, x, y, z, angle)
+    if inst == nil or not inst:IsValid() then
+        return false
+    end
+
+    if inst._is_trawling_dropped then
+        return false
+    end
+    inst._is_trawling_dropped = true
 
     local chest = SpawnPrefab("trawlnetdropped")
-    local owner = inst.navio
-    local x, y, z = owner.Transform:GetWorldPosition()
-    local pt = Vector3(x, y, z)
+    if chest == nil then
+        inst._is_trawling_dropped = nil
+        return false
+    end
 
     chest:DoDetach()
-    local num = inst.components.inventory:NumItems()
-
-    repeat
-        if inst.raso and inst.raso > 0 then
-            local item = SpawnPrefab(loot.shallow[math.random(1, 10)])
-            chest.components.container:GiveItem(item, num + 1)
-            inst.raso = inst.raso - 1
-        end
-    until
-        inst.raso <= 0 or nil
-
-    repeat
-        if inst.medio and inst.medio > 0 then
-            local item = SpawnPrefab(loot.medium[math.random(1, 20)])
-            chest.components.container:GiveItem(item, num + 1)
-            inst.medio = inst.medio - 1
-        end
-    until
-        inst.medio <= 0 or nil
-
-    repeat
-        if inst.fundo and inst.fundo > 0 then
-            local item = SpawnPrefab(loot.deep[math.random(1, 31)])
-            chest.components.container:GiveItem(item, num + 1)
-            inst.fundo = inst.fundo - 1
-        end
-    until
-        inst.fundo <= 0 or nil
-
-    repeat
-        if inst.seawed and inst.seawed > 0 then
-            local item = SpawnPrefab("seaweed_stalk")
-            chest.components.container:GiveItem(item, num + 1)
-            inst.seawed = inst.seawed - 1
-        end
-    until
-        inst.seawed <= 0 or nil
-
-
-    repeat
-        if inst.jellyfish and inst.jellyfish > 0 then
-            local item = SpawnPrefab("jellyfish")
-            chest.components.container:GiveItem(item, num + 1)
-            inst.jellyfish = inst.jellyfish - 1
-        end
-    until
-        inst.jellyfish <= 0 or nil
-
-
-    repeat
-        if inst.lobster and inst.lobster > 0 then
-            local item = SpawnPrefab("lobster_land")
-            chest.components.container:GiveItem(item, num + 1)
-            inst.lobster = inst.lobster - 1
-        end
-    until
-        inst.lobster <= 0 or nil
-
-    repeat
-        if inst.rainbowjellyfish and inst.rainbowjellyfish > 0 then
-            local item = SpawnPrefab("rainbowjellyfish")
-            chest.components.container:GiveItem(item, num + 1)
-            inst.rainbowjellyfish = inst.rainbowjellyfish - 1
-        end
-    until
-        inst.rainbowjellyfish <= 0 or nil
-
-
-    repeat
-        if inst.mussel and inst.mussel > 0 then
-            local item = SpawnPrefab("mussel")
-            chest.components.container:GiveItem(item, num + 1)
-            inst.mussel = inst.mussel - 1
-        end
-    until
-        inst.mussel <= 0 or nil
-
-    if owner then
-        local angle = owner:GetRotation()
-        local dist = -3
-        local offset = Vector3(dist * math.cos(angle * DEGREES), 0, -dist * math.sin(angle * DEGREES))
-        local chestpos = pt + offset
-        chest.Transform:SetPosition(chestpos:Get())
-        chest:FacePoint(pt:Get())
+    chest.Transform:SetPosition(x, y, z)
+    if angle ~= nil then
+        local offset = Vector3(-3 * math.cos(angle * DEGREES), 0, 3 * math.sin(angle * DEGREES))
+        chest.Transform:SetPosition(x + offset.x, y, z + offset.z)
+        chest:FacePoint(x, y, z)
     end
 
-    inst.apaga = 1
-end
-
-local function gettrawlbuild(inst)
-    if inst and inst.apaga == 1 then inst:Remove() end
-    local fullness = (inst.raso + inst.medio + inst.fundo + inst.seawed + inst.jellyfish + inst.lobster + inst.rainbowjellyfish + inst.mussel) /
-        9
-    if fullness <= 0.33 then
-        inst.build = "swap_trawlnet"
-    elseif fullness <= 0.66 then
-        inst.build = "swap_trawlnet_half"
-    else
-        inst.build = "swap_trawlnet_full"
+    local inventory = inst.components.inventory
+    if inventory == nil then
+        chest:Remove()
+        inst._is_trawling_dropped = nil
+        return false
     end
-    if (inst.raso + inst.medio + inst.fundo + inst.seawed + inst.jellyfish + inst.lobster + inst.rainbowjellyfish + inst.mussel) > 9.9 then
-        droploot(inst)
+
+    for item_slot = 1, inventory.maxslots do
+        local item = inventory:RemoveItemBySlot(item_slot)
+        if item ~= nil and item:IsValid() and item.components.inventoryitem ~= nil then
+            chest.components.container:GiveItem(item, item_slot)
+        end
+    end
+
+    StopTrawling(inst)
+    if inst:IsValid() then
+        local inventoryitem = inst.components.inventoryitem
+        if inventoryitem ~= nil and inventoryitem.owner ~= nil then
+            inventoryitem:RemoveFromOwner(true)
+        end
+        inst:Remove()
+    end
+
+    inst._is_trawling_dropped = nil
+
+    return true
+end
+
+local function DropFullTrawlnet(inst, sailor)
+    if inst == nil or not inst:IsValid() then
+        return false
+    end
+
+    local drop_sailor = sailor
+    if drop_sailor == nil or not drop_sailor:IsValid() then
+        drop_sailor = BoatEquip.GetItemSailor(inst)
+    end
+
+    if drop_sailor == nil or not drop_sailor:IsValid() then
+        local boat = BoatEquip.GetItemBoat(inst)
+        if boat ~= nil and boat:IsValid() then
+            local boat_sailor = boat.components.sailable ~= nil and boat.components.sailable:GetSailor() or nil
+            if boat_sailor ~= nil and boat_sailor:IsValid() then
+                drop_sailor = boat_sailor
+            end
+        end
+    end
+
+    if drop_sailor == nil or not drop_sailor:IsValid() then
+        drop_sailor = inst
+    end
+
+    local x, y, z = drop_sailor.Transform:GetWorldPosition()
+    local angle = drop_sailor.Transform:GetRotation()
+    local spawned = SpawnDroppedTrawlnet(inst, x, y, z, angle)
+    if not spawned then
+        return false
+    end
+
+    return true
+end
+
+local function PutItemInNet(inst, item, sailor)
+    local inventory = inst.components.inventory
+    if inventory == nil or item == nil or not item:IsValid() or item.components.inventoryitem == nil then
+        return false
+    end
+
+    local inventoryitem = item.components.inventoryitem
+    inventoryitem:SetLanded(false, false)
+
+    if inventoryitem.owner ~= nil and inventoryitem.owner ~= inst then
+        inventoryitem:RemoveFromOwner(true)
+    end
+
+    for slot = 1, inventory.maxslots do
+        if inventory.itemslots[slot] == nil then
+            local destroyed = inventoryitem:OnPickup(inst, sailor ~= nil and sailor:GetPosition() or nil)
+            if destroyed then
+                return false
+            end
+
+            inventory.itemslots[slot] = item
+            inventoryitem:OnPutInInventory(inst)
+            inst:PushEvent("itemget", { item = item, slot = slot })
+            if item.components.equippable ~= nil then
+                item.components.equippable:ToPocket()
+            end
+            return inventoryitem:IsHeldBy(inst)
+        end
+    end
+
+    return false
+end
+
+local function StoreTrawlItem(inst, sailor, item)
+    if item == nil or not item:IsValid() or inst.components.inventory:IsFull() then
+        return false
+    end
+
+    local captured = item
+
+    if not PutItemInNet(inst, captured, sailor) then
+        return false
+    end
+
+    if captured.components.weighable ~= nil and sailor ~= nil and sailor:IsValid() then
+        captured.components.weighable:SetPlayerAsOwner(sailor)
+    end
+    if sailor ~= nil and sailor.components ~= nil and sailor.components.sailor ~= nil then
+        sailor.components.sailor:NotifyTrawlItem()
+    elseif sailor ~= nil then
+        sailor:PushEvent("trawl_item", { item = item })
+    end
+    inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/trawl_net/collect")
+    inst.trawl_next_pickup_time = GetTime() + TRAWL_SUCCESS_COOLDOWN
+    UpdateTrawlBuild(inst)
+    if inst.components.inventory:IsFull() then
+        if sailor ~= nil then
+            sailor:PushEvent("trawl_full")
+        end
+        DropFullTrawlnet(inst, sailor)
+    end
+    return true
+end
+
+local function TrawlTarget(inst, sailor, target, trawlable, category)
+    if not IsValidTrawlTargetEntity(target) then
+        return false
+    end
+
+    if trawlable == nil then
+        return false
+    end
+
+    local loot = trawlable:Trawl(sailor)
+    if loot == nil then
+        if category == "fishable_creatures" or category == "oceanfish" then
+            trawlable = TrawlHelper.EnsureRuntimeFishTrawlable(inst, target)
+            loot = trawlable ~= nil and trawlable:Trawl(sailor) or nil
+        end
+    end
+    if loot == nil then
+        return false
+    end
+    if loot.components ~= nil then
+        local stored = StoreTrawlItem(inst, sailor, loot)
+        return stored
+    end
+    local stored = false
+    for _, item in ipairs(loot) do
+        if item ~= nil and item:IsValid() and StoreTrawlItem(inst, sailor, item) then
+            if inst == nil or not inst:IsValid() or inst.components.inventory:IsFull() then
+                return true
+            end
+            stored = true
+        end
+    end
+    if stored then
+        return true
+    end
+    return false
+end
+
+local function TryTrawlCandidates(inst, sailor, candidates)
+    for _, candidate in ipairs(candidates) do
+        local target = candidate.target or candidate
+        if IsValidTrawlTargetEntity(target) then
+            if candidate.category == "floating" then
+                local isbehind = IsBehindSailor(sailor, target)
+                if isbehind and StoreTrawlItem(inst, sailor, target) then
+                    return true
+                end
+            else
+                local trawlable = candidate.trawlable
+                if trawlable == nil then
+                    trawlable = EnsureTrawlableTargetForCategory(inst, target, candidate.category)
+                    candidate.trawlable = trawlable
+                end
+                local isbehind = IsBehindSailor(sailor, target)
+                local isvisible = target.entity:IsVisible()
+                local cantrawl = trawlable ~= nil and trawlable:CanBeTrawledBy(sailor, isbehind, isvisible)
+                if trawlable ~= nil
+                    and cantrawl
+                    and TrawlTarget(inst, sailor, target, trawlable, candidate.category)
+                then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function TryTrawlAtPoint(inst, sailor, x, y, z)
+    local candidates = CollectTrawlCandidates(inst, x, y, z)
+    return TryTrawlCandidates(inst, sailor, candidates)
+end
+
+local function GenerateTrawlLoot(inst, sailor)
+    local bucket = GetTrawlBucket(sailor)
+    local table_for_depth = getLootList(sailor)
+    return SpawnPrefab(SelectTrawlLoot(inst, table_for_depth, bucket))
+end
+
+local function CanRunTrawlTask(inst)
+    local boat = BoatEquip.GetItemBoat(inst)
+    local sailor = boat ~= nil
+        and boat.components.sailable ~= nil
+        and boat.components.sailable:GetSailor()
+        or nil
+    return sailor ~= nil and sailor.components.locomotor ~= nil
+end
+
+StopTrawling = function(inst)
+    inst.trawl_last_pos = nil
+    if inst.trawl_task ~= nil then
+        inst.trawl_task:Cancel()
+        inst.trawl_task = nil
     end
 end
 
-local function OnSave(inst, data)
-    data.raso = inst.raso
-    data.medio = inst.medio
-    data.fundo = inst.fundo
-    data.seawed = inst.seawed
-    data.jellyfish = inst.jellyfish
-    data.lobster = inst.lobster
-    data.rainbowjellyfish = inst.rainbowjellyfish
-    data.mussel = inst.mussel
+local function UpdateTrawling(inst)
+    local boat = BoatEquip.GetItemBoat(inst)
+    local sailor = boat ~= nil and boat.components.sailable ~= nil and boat.components.sailable:GetSailor() or nil
+    if boat == nil or sailor == nil or sailor.components.locomotor == nil then
+        StopTrawling(inst)
+        return
+    end
+
+    local x, _, z = sailor.Transform:GetWorldPosition()
+    if inst.trawl_last_pos ~= nil then
+        local dx = x - inst.trawl_last_pos.x
+        local dz = z - inst.trawl_last_pos.z
+        inst.trawl_distance = inst.trawl_distance + math.sqrt(dx * dx + dz * dz)
+    end
+    inst.trawl_last_pos = { x = x, z = z }
+
+    if inst.trawl_next_pickup_time ~= nil and GetTime() < inst.trawl_next_pickup_time then
+        return
+    end
+
+    local tx, ty, tz = GetTrawlPoint(sailor)
+    if TryTrawlAtPoint(inst, sailor, tx, ty, tz) then
+        return
+    end
+
+    if inst.trawl_distance >= TRAWLNET_ITEM_DISTANCE then
+        inst.trawl_distance = inst.trawl_distance - TRAWLNET_ITEM_DISTANCE
+        if not StoreTrawlItem(inst, sailor, GenerateTrawlLoot(inst, sailor)) then
+            StopTrawling(inst)
+            return
+        end
+    end
 end
 
-local function OnLoad(inst, data)
-    if data == nil then return end
-    if data.raso then inst.raso = data.raso end
-    if data.medio then inst.medio = data.medio end
-    if data.fundo then inst.fundo = data.fundo end
-    if data.seawed then inst.seawed = data.seawed end
-    if data.jellyfish then inst.jellyfish = data.jellyfish end
-    if data.lobster then inst.lobster = data.lobster end
-    if data.rainbowjellyfish then inst.rainbowjellyfish = data.rainbowjellyfish end
-    if data.mussel then inst.mussel = data.mussel end
+local function StartTrawling(inst)
+    if inst.trawl_task == nil and CanRunTrawlTask(inst) then
+        inst.trawl_distance = inst.trawl_distance or 0
+        inst.trawl_task = inst:DoPeriodicTask(TRAWL_CHECK_PERIOD, UpdateTrawling)
+        inst:DoTaskInTime(0, UpdateTrawling)
+        inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/trawl_net/attach")
+    end
 end
 
-
-
+local function RefreshTrawlState(inst)
+    if inst ~= nil and inst.components.inventory ~= nil then
+        UpdateTrawlBuild(inst)
+        if BoatEquip.GetItemBoat(inst) ~= nil and inst.trawl_task == nil then
+            StartTrawling(inst)
+        end
+    end
+end
 
 local function net(Sim)
     local inst = CreateEntity()
     inst.entity:AddTransform()
     inst.entity:AddAnimState()
+    inst.entity:AddSoundEmitter()
     inst.entity:AddNetwork()
-
-    inst.raso = 0
-    inst.medio = 0
-    inst.fundo = 0
-    inst.seawed = 0
-    inst.jellyfish = 0
-    inst.lobster = 0
-    inst.rainbowjellyfish = 0
-    inst.mussel = 0
-    inst.apaga = nil
 
     inst.AnimState:SetBank("trawlnet")
     inst.AnimState:SetBuild("swap_trawlnet")
     inst.AnimState:PlayAnimation("idle")
-    inst.navio = nil
     MakeInventoryPhysics(inst)
     MakeInventoryFloatable(inst)
     inst.build = "swap_trawlnet"
     inst.symbol = "swap_trawlnet"
     inst.symboltooverride = "swap_trawlnet" --swap_lantern_off
+    inst.sail_speed_mult = 0
 
     MakeSmallBurnable(inst, TUNING.SMALL_BURNTIME)
     MakeSmallPropagator(inst)
@@ -500,14 +615,43 @@ local function net(Sim)
     inst.components.inventory.show_invspace = true
 
     inst:AddComponent("inventoryitem")
+    inst:AddComponent("equippable")
+    inst.components.equippable.boatequipslot = BOATEQUIPSLOTS.BOAT_SAIL
+    inst.components.equippable.restrictedtag = "ta_boat_equipment"
 
+    inst:ListenForEvent("boatequipped", StartTrawling)
+    inst:ListenForEvent("boat_embarked", StartTrawling)
+    inst:ListenForEvent("oceanwrapped", function(inst) inst.trawl_last_pos = nil end)
+    inst:ListenForEvent("boatunequipped", function(inst, data)
+        StopTrawling(inst)
+        if inst._drop_task ~= nil or inst.components.inventory == nil or inst.components.inventory:NumItems() == 0 then
+            return
+        end
 
+        local boat = data ~= nil and data.boat or BoatEquip.GetItemBoat(inst)
+        local x, y, z = inst.Transform:GetWorldPosition()
+        local angle = inst.Transform:GetRotation()
+        if boat ~= nil and boat:IsValid() then
+            x, y, z = boat.Transform:GetWorldPosition()
+            local sailor = boat.components.sailable ~= nil and boat.components.sailable:GetSailor() or nil
+            if sailor ~= nil then
+                angle = sailor.Transform:GetRotation()
+            else
+                angle = boat.Transform:GetRotation()
+            end
+        end
 
-    inst:ListenForEvent("onpickup", droploot)
+        inst._drop_task = inst:DoTaskInTime(0, function()
+            inst._drop_task = nil
+            if inst:IsValid() and inst.components.inventory ~= nil and inst.components.inventory:NumItems() > 0 then
+                SpawnDroppedTrawlnet(inst, x, y, z, angle)
+            end
+        end)
+    end)
+    inst:ListenForEvent("boat_disembarked", StopTrawling)
+    inst:ListenForEvent("onremove", StopTrawling)
     inst.rowsound = "dontstarve_DLC002/common/trawl_net/move_LP"
-    inst:DoPeriodicTask(1, gettrawlbuild)
-    inst.OnSave = OnSave
-    inst.OnLoad = OnLoad
+    inst:DoPeriodicTask(1, RefreshTrawlState)
     return inst
 end
 
@@ -516,11 +660,13 @@ local function sink(inst, instant)
     if not instant then
         inst.AnimState:PlayAnimation("sink_pst")
         inst:ListenForEvent("animover", function()
+            CleanInvalidContainerSlots(inst)
             inst.components.container:DropEverything()
             inst:Remove()
         end)
     else
         -- this is to catch the nets that for some reason dont have the right timer save data.
+        CleanInvalidContainerSlots(inst)
         inst.components.container:DropEverything()
         inst:Remove()
     end
@@ -590,7 +736,6 @@ end
 
 local function onloadtimer(inst)
     if not inst.components.timer:TimerExists("sink") and not inst.components.timer:TimerExists("startsink") then
-        print("TRAWL NET HAD NO TIMERS AND WAS FORCE SUNK")
         sink(inst, true)
     end
 end

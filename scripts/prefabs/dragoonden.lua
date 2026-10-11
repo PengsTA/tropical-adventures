@@ -1,4 +1,5 @@
 require "prefabutil"
+local DenPopulation = require("tools/den_population")
 
 local assets =
 {
@@ -16,8 +17,8 @@ local function ongohome(inst, child)
 end
 
 local function onhammered(inst, worker)
-    if inst.components.spawner ~= nil and inst.components.spawner:IsOccupied() then
-        inst.components.spawner:ReleaseChild()
+    if inst.components.childspawner ~= nil then
+        inst.components.childspawner:ReleaseAllChildren()
     end
     inst.components.lootdropper:DropLoot()
     SpawnPrefab("collapse_big").Transform:SetPosition(inst.Transform:GetWorldPosition())
@@ -38,34 +39,27 @@ end
 
 local function OnStartDay(inst)
     --print(inst, "OnStartDay")
-    if inst.components.spawner:IsOccupied() then
-        inst.components.spawner:ReleaseChild()
+    if inst.components.childspawner.childreninside > 0 then
+        inst.components.childspawner:ReleaseAllChildren()
     end
 end
 
 local function spawncheckday(inst)
     inst.inittask = nil
     inst:WatchWorldState("startcaveday", OnStartDay)
-    if inst.components.spawner ~= nil and inst.components.spawner:IsOccupied() then
+    if inst.components.childspawner ~= nil then
         if TheWorld.state.iscaveday or
             (inst.components.burnable ~= nil and inst.components.burnable:IsBurning()) then
-            inst.components.spawner:ReleaseChild()
+            inst.components.childspawner:StartSpawning()
+            inst.components.childspawner:ReleaseAllChildren()
+        else
+            inst.components.childspawner:StopSpawning()
         end
     end
 end
 
 local function oninit(inst)
     inst.inittask = inst:DoTaskInTime(math.random(), spawncheckday)
-    if inst.components.spawner ~= nil and
-        inst.components.spawner.child == nil and
-        inst.components.spawner.childname ~= nil and
-        not inst.components.spawner:IsSpawnPending() then
-        local child = SpawnPrefab(inst.components.spawner.childname)
-        if child ~= nil then
-            inst.components.spawner:TakeOwnership(child)
-            inst.components.spawner:GoHome(child)
-        end
-    end
 end
 
 local function onoccupied(inst, child)
@@ -108,12 +102,14 @@ local function fn()
     inst.components.workable:SetOnFinishCallback(onhammered)
     inst.components.workable:SetOnWorkCallback(onhit)
 
-    inst:AddComponent("spawner")
-    WorldSettings_Spawner_SpawnDelay(inst, TUNING.TOTAL_DAY_TIME * 1, true)
-    inst.components.spawner:Configure("dragoon", TUNING.TOTAL_DAY_TIME * 1)
-    inst.components.spawner.onoccupied = onoccupied
-    inst.components.spawner.onvacate = onvacate
-    inst.components.spawner:CancelSpawning()
+    local population = DenPopulation.Configure(inst, "dragoon", TUNING.TOTAL_DAY_TIME, false, true)
+    population.onoccupied = onoccupied
+    population.onvacate = onvacate
+    population.ongohome = ongohome
+    inst:WatchWorldState("iscaveday", function(den, isday)
+        if isday then den.components.childspawner:StartSpawning()
+        else den.components.childspawner:StopSpawning() end
+    end)
 
     inst:AddComponent("inspectable")
 

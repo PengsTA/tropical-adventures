@@ -11,6 +11,7 @@ require "behaviours/chattynode"
 require "behaviours/leash"
 
 local MAX_CHASE_TIME = 40
+local AntEcology = require("tools/antecology")
 
 local function HasValidHome(inst)
     return inst.components.homeseeker and 
@@ -25,39 +26,11 @@ local function GetHomePos(inst)
 end
 
 local function GetWanderPoint(inst)
-    local player = GetClosestInstWithTag("player", inst, 30)
-    return GetHomePos(inst) or (player and player:GetPosition())
-end
-
-local function translationfn(inst)
-    local player = GetClosestInstWithTag("player", inst, 30)
-    if player:HasTag("antlingual") then        
-        return true
-    else
-        return false
-    end
-end
-
-local function makechatpackage(speech)
-return {
-        chatlines = speech,
-        untranslated = STRINGS.ANT_TALK_UNTRANSLATED,
-        translationfn = translationfn
-    }
-end
-
-local function shouldPanic(inst)
-    if inst.components.combat.target then
-        local threat = inst.components.combat.target
-        if threat then
-            if threat.components.inventory then
-                local equipped = threat.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
-                return equipped and equipped.prefab == "magnifying_glass"
-            end
-        end
-    end
-
-    return false
+    local home = GetHomePos(inst)
+    if home then return home end
+    local locations = inst.components.knownlocations
+    locations:RememberLocation("patrol", inst:GetPosition(), true)
+    return locations:GetLocation("patrol")
 end
 
 local AntWarriorBrain = Class(Brain, function(self, inst)
@@ -69,7 +42,8 @@ function AntWarriorBrain:OnStart()
     {
         WhileNode(function() return self.inst.components.health.takingfiredamage end, "OnFire", Panic(self.inst) ),
         
-        ChaseAndAttack(self.inst, MAX_CHASE_TIME),
+        ChattyNode(self.inst, "ANT_TALK_FIGHT", ChaseAndAttack(self.inst, MAX_CHASE_TIME)),
+        Follow(self.inst, AntEcology.GetLeader, 2, 5, 9),
         Wander(self.inst, GetWanderPoint, 20),
 
     }, .1)

@@ -58,15 +58,15 @@ local FARM_FILLER_CHOICES = {
 
 -- 城市1（通常是主城）的建筑配额，定义了各种商店和民居的数量
 local BUILDING_QUOTAS = {
-    { prefab = "pig_shop_deli_entrance",    num = 1 },
-    -- { prefab = "pig_shop_academy_entrance", num = 1 },
-    { prefab = "pig_shop_florist_entrance", num = 1 },
-    { prefab = "pig_shop_general_entrance", num = 1 },
-    { prefab = "pig_shop_hoofspa_entrance", num = 1 },
-    { prefab = "pig_shop_produce_entrance", num = 1 },
-    { prefab = "pig_shop_bank_entrance",    num = 1 },
+    { prefab = "pig_shop_deli",    num = 1 },
+    -- { prefab = "pig_shop_academy", num = 1 },
+    { prefab = "pig_shop_florist", num = 1 },
+    { prefab = "pig_shop_general", num = 1 },
+    { prefab = "pig_shop_hoofspa", num = 1 },
+    { prefab = "pig_shop_produce", num = 1 },
+    { prefab = "pig_shop_bank",    num = 1 },
 
-    { prefab = "pig_academy_entrance",      num = 1 },
+    { prefab = "pig_shop_academy",      num = 1 },
 
     { prefab = "pig_guard_tower",           num = 15 },
     { prefab = "pighouse_city",             num = 50 },
@@ -75,14 +75,14 @@ local BUILDING_QUOTAS = {
 
 -- 城市2（通常是副城/高级城）的建筑配额，包含武器店、奥术店等
 local BUILDING_QUOTAS_2 = {
-    -- { prefab = "pig_shop_antiquities_entrance",  num = 2 },
-    -- { prefab = "pig_shop_hatshop_entrance", num = 1 },
-    { prefab = "pig_shop_weapons_entrance", num = 1 },
-    { prefab = "pig_shop_arcane_entrance",  num = 1 },
-    { prefab = "pig_shop_tinker_entrance",  num = 1 },
+    -- { prefab = "pig_shop_antiquities",  num = 2 },
+    -- { prefab = "pig_shop_hatshop", num = 1 },
+    { prefab = "pig_shop_weapons", num = 1 },
+    { prefab = "pig_shop_arcane",  num = 1 },
+    { prefab = "pig_shop_tinker",  num = 1 },
 
-    { prefab = "pig_antiquities_entrance",  num = 2 },
-    { prefab = "hatshop_entrance",          num = 1 },
+    { prefab = "pig_shop_antiquities",  num = 2 },
+    { prefab = "pig_shop_hatshop",          num = 1 },
 
     { prefab = "pig_guard_tower",           num = 15 },
     { prefab = "pighouse_city",             num = 50 },
@@ -319,22 +319,6 @@ local function spawn_setpiece(entities, width, height, spawners, layout, pt, cit
         x_flip = -1
     end
 
-    local radius = math.max(#setpiece.ground, #setpiece.ground[1]) / 2 * 1.4
-
-    -- 生成前再次清理该范围内的原生资源
-    for prefab, data_list in pairs(entities) do
-        for i = #data_list, 1, -1 do
-            local xdist = math.abs(((data_list[i].x / TILE_SCALE) + width / 2.0) - pt.x) + 0.2
-            local zdist = math.abs(((data_list[i].z / TILE_SCALE) + height / 2.0) - pt.z) + 0.2
-
-            if (xdist * xdist) + (zdist * zdist) <= radius * radius then
-                if tableutil.has_component(unrequired_prefabs, prefab) then
-                    table.remove(data_list, i)
-                end
-            end
-        end
-    end
-
     -- 第一遍：检查布局覆盖的所有地皮是否都在陆地上
     local ground_valid = true
     for x = 1, #setpiece.ground do
@@ -354,6 +338,19 @@ local function spawn_setpiece(entities, width, height, spawners, layout, pt, cit
 
     -- 第二遍：如果地皮合法，则正式铺设地皮并添加实体到 spawners 列表
     if ground_valid then
+        -- Failed candidates must leave resources and shop placeholders intact.
+        local radius = math.max(#setpiece.ground, #setpiece.ground[1]) / 2 * 1.4
+        for prefab, data_list in pairs(entities) do
+            if tableutil.has_component(unrequired_prefabs, prefab) then
+                for i = #data_list, 1, -1 do
+                    local xdist = math.abs(data_list[i].x / TILE_SCALE + width / 2 - pt.x) + 0.2
+                    local zdist = math.abs(data_list[i].z / TILE_SCALE + height / 2 - pt.z) + 0.2
+                    if xdist * xdist + zdist * zdist <= radius * radius then
+                        table.remove(data_list, i)
+                    end
+                end
+            end
+        end
         for x = 1, #setpiece.ground do
             for y = 1, #setpiece.ground[x] do
                 local new_pt = {}
@@ -571,45 +568,47 @@ end
 
 
 -- 城市生成核心逻辑：选择起点，填充网格，通过类似 Prim 算法的逻辑随机生成街道网格
-local function create_city(entities, width, height, spawners, city)
-    local start_node = nil
-
-    -- 尝试在城市区域内找一个合法的起点
-    while not start_node do
-        local idx = math.random(1, #city.citynodes)
-        start_node = city.citynodes[idx]
-        local x, z = start_node.cent[1], start_node.cent[2]
-        local y = 0
-        x, y, z = get_div8_tile(x, 0, z)
-        local testpt = { x = x, y = y, z = z }
-        if not test_tile(testpt, VALID_TILES) then start_node = nil end
-    end
-
-
-    -- 如果中心点都不行，则遍历多边形顶点尝试找起点
-    if not start_node then
-        local new_node_list = deepcopy(city.citynodes)
-        while not start_node do
-            local idx = math.random(1, #new_node_list)
-            start_node = new_node_list[idx]
-            local ok = false
-            for i = 1, #start_node.poly.x, 1 do
-                local x, z = start_node.poly.x[i], start_node.poly.y[i]
-                local y = 0
-                x, y, z = get_div8_tile(x, 0, z)
-                if test_tile({ x = x, y = y, z = z }, VALID_TILES) then
-                    ok = true
-                    break
-                end
-            end
-            if not ok then start_node = nil end
-            table.remove(new_node_list, idx)
+local function find_city_start(city, width, height)
+    local count = #city.citynodes
+    if count == 0 then return nil end
+    local first = math.random(count)
+    local function Check(node, x, z)
+        local tx, _, tz = get_div8_tile(x, 0, z)
+        local pt = { x = tx, y = 0, z = tz }
+        if tx >= 2 and tz >= 2 and tx < width - 2 and tz < height - 2
+            and WorldSim:PointInSite(node.id, tx, tz) and test_tile(pt, VALID_TILES) then
+            return pt
         end
     end
+    -- Visit each centroid once, then exhaust the aligned grid inside each polygon.
+    for offset = 0, count - 1 do
+        local node = city.citynodes[(first + offset - 1) % count + 1]
+        local pt = Check(node, node.cent[1], node.cent[2])
+        if pt then return pt end
+    end
+    for offset = 0, count - 1 do
+        local node = city.citynodes[(first + offset - 1) % count + 1]
+        local minx, minz, maxx, maxz = width, height, 0, 0
+        for i, x in ipairs(node.poly.x) do
+            local z = node.poly.y[i]
+            minx, minz = math.min(minx, x), math.min(minz, z)
+            maxx, maxz = math.max(maxx, x), math.max(maxz, z)
+        end
+        minx = math.ceil((math.max(2, minx) - 4) / 8) * 8 + 4
+        minz = math.ceil((math.max(2, minz) - 4) / 8) * 8 + 4
+        for x = minx, math.min(maxx, width - 3), 8 do
+            for z = minz, math.min(maxz, height - 3), 8 do
+                local pt = Check(node, x, z)
+                if pt then return pt end
+            end
+        end
+    end
+end
 
-    local x, z = start_node.cent[1], start_node.cent[2]
-    local y = 0
-    x, y, z = get_div8_tile(x, 0, z)
+local function create_city(entities, width, height, spawners, city)
+    local start_pt = find_city_start(city, width, height)
+    if start_pt == nil then return false end
+    local x, y, z = start_pt.x, start_pt.y, start_pt.z
 
     local grid = { { x = x, y = y, z = z } }
 
@@ -627,7 +626,7 @@ local function create_city(entities, width, height, spawners, city)
                     in_city_node = true
                 end
             end
-            if test_tile(newpt, VALID_TILES) and in_city_node then
+            if (nx ~= 0 or nz ~= 0) and test_tile(newpt, VALID_TILES) and in_city_node then
                 table.insert(grid, newpt)
             end
         end
@@ -657,6 +656,7 @@ local function create_city(entities, width, height, spawners, city)
         end
         table.remove(opendirs, idx)
     end
+    return true
 end
 
 -- 在预留的公园候选点生成公园、皇宫、市政厅或玩家房子
@@ -665,61 +665,39 @@ local function make_parks(entities, width, height, spawners, city, unique, uniqu
     if unique then total_parks = unique_parks end
 
     for i = 1, total_parks do
-        if #city.parks > 0 then
-            local index = math.random(1, #city.parks)
-            local park = city.parks[index]
+        local choice, selection
+        if not made_palace and city.city_id == 2 then
+            choice = "pig_palace_1"
+        elseif not made_cityhall and city.city_id == 1 then
+            choice = "pig_cityhall_1"
+        elseif not made_playerhouse and city.city_id == 1 then
+            choice = "pig_playerhouse_1"
+        elseif unique then
+            if #city.unique_park_choices == 0 then return end
+            selection = math.random(#city.unique_park_choices)
+            choice = city.unique_park_choices[selection]
+        else
+            choice = PARK_CHOICES[math.random(#PARK_CHOICES)]
+        end
 
-            -- 公园区域如果有商店占位符，先移除
-            local pigshops_spawners = find_temp_ents(spawners, park.x, park.z, 3, { "pig_shop_spawner" })
-            for _, spawner in ipairs(pigshops_spawners) do
-                for s = #spawners, 1, -1 do
-                    if spawner == spawners[s] then table.remove(spawners, s) end
-                end
-            end
-
-            -- 优先级：皇宫 (城市2) > 市政厅 (城市1) > 玩家房 (城市1) > 普通/特殊公园
-            if made_palace == false and city.city_id == 2 then
-                local choice = "pig_palace_1"
-                if choice ~= nil then
-                    spawn_setpiece(entities, width, height, spawners, choice, { x = park.x, y = park.y, z = park.z },
-                        city)
-                    table.remove(city.parks, index)
-                    made_palace = true
-                end
-            elseif made_cityhall == false and city.city_id == 1 then
-                local choice = "pig_cityhall_1"
-                if choice ~= nil then
-                    spawn_setpiece(entities, width, height, spawners, choice, { x = park.x, y = park.y, z = park.z },
-                        city)
-                    table.remove(city.parks, index)
-                    made_cityhall = true
-                end
-            elseif made_playerhouse == false and city.city_id == 1 then
-                local choice = "pig_playerhouse_1"
-                if choice ~= nil then
-                    spawn_setpiece(entities, width, height, spawners, choice, { x = park.x, y = park.y, z = park.z },
-                        city)
-                    table.remove(city.parks, index)
-                    made_playerhouse = true
-                end
-            else
-                local choice = PARK_CHOICES[math.random(1, #PARK_CHOICES)]
-                if unique then
-                    if #UNIQUE_PARK_CHOICES > 0 then
-                        local selection = math.random(1, #UNIQUE_PARK_CHOICES)
-                        choice = UNIQUE_PARK_CHOICES[selection]
-                        table.remove(UNIQUE_PARK_CHOICES, selection)
-                    else
-                        choice = nil
+        local placed = false
+        while not placed and #city.parks > 0 do
+            local park = table.remove(city.parks, math.random(#city.parks))
+            local old_shops = find_temp_ents(spawners, park.x, park.z, 3, { "pig_shop_spawner" })
+            placed = spawn_setpiece(entities, width, height, spawners, choice, park, city)
+            if placed then
+                for _, spawner in ipairs(old_shops) do
+                    for s = #spawners, 1, -1 do
+                        if spawner == spawners[s] then table.remove(spawners, s) end
                     end
                 end
-                if choice ~= nil then
-                    spawn_setpiece(entities, width, height, spawners, choice, { x = park.x, y = park.y, z = park.z },
-                        city)
-                    table.remove(city.parks, index)
-                end
+                if choice == "pig_palace_1" then made_palace = true end
+                if choice == "pig_cityhall_1" then made_cityhall = true end
+                if choice == "pig_playerhouse_1" then made_playerhouse = true end
+                if selection then table.remove(city.unique_park_choices, selection) end
             end
         end
+        if not placed then return end
     end
 end
 
@@ -803,7 +781,7 @@ local function set_buildings(spawners, city)
         end
     end
 
-    for _, data_set in pairs(building_quotas) do
+    for _, data_set in ipairs(building_quotas) do
         local building_type = data_set.prefab
         local num = data_set.num
         for t = 1, num do
@@ -832,6 +810,29 @@ local function remove_shop_spawners(spawners)
             table.remove(spawners, i)
         end
     end
+end
+
+local function validate_city_buildings(spawners, city)
+    local required = city.city_id == 1
+        and { pig_shop_cityhall = 1, playerhouse_city = 1 }
+        or { pig_palace_entrance = 1 }
+    local quotas = city.city_id == 1 and BUILDING_QUOTAS or BUILDING_QUOTAS_2
+    for _, quota in ipairs(quotas) do
+        if quota.prefab ~= "pig_guard_tower" and quota.prefab ~= "pighouse_city" then
+            required[quota.prefab] = quota.num
+        end
+    end
+    for _, spawner in ipairs(spawners) do
+        if spawner.city == city.city_id and required[spawner.prefab] ~= nil then
+            required[spawner.prefab] = required[spawner.prefab] - 1
+        end
+    end
+    for prefab, missing in pairs(required) do
+        if missing > 0 then
+            return false, string.format("city %d is missing %d %s", city.city_id, missing, prefab)
+        end
+    end
+    return true
 end
 
 -- 列表查找并移除辅助函数
@@ -863,11 +864,13 @@ local function make_cities(entities, topology_save, worldsim, width, height, set
     made_palace = false
     made_cityhall = false
     made_playerhouse = false
+    local unique_park_choices = deepcopy(UNIQUE_PARK_CHOICES)
 
     -- 第一阶段：根据世界拓扑数据识别并分类城市节点和农田节点
     local cities = {}
     for city_id = 1, CITIES do
-        cities[city_id] = { parks = {}, citynodes = {}, farmnodes = {}, city_id = city_id }
+        cities[city_id] = { parks = {}, citynodes = {}, farmnodes = {}, city_id = city_id,
+            unique_park_choices = unique_park_choices }
 
         for task, node in pairs(topology_save.root:GetNodes(true)) do
             if table.contains(node.data.tags, "City" .. city_id) then
@@ -891,11 +894,15 @@ local function make_cities(entities, topology_save, worldsim, width, height, set
 
     -- 第三阶段：对每个城市执行网格生成、公园放置、建筑结算
     for city_ID, city in ipairs(cities) do
-        create_city(entities, width, height, spawners, city)
+        if not create_city(entities, width, height, spawners, city) then
+            return nil, string.format("city %d has no valid starting point", city.city_id)
+        end
         make_parks(entities, width, height, spawners, city, true, 2)
         make_parks(entities, width, height, spawners, city)
         set_buildings(spawners, city)
         make_farms(entities, width, height, spawners, city.farmnodes, city)
+        local valid, reason = validate_city_buildings(spawners, city)
+        if not valid then return nil, reason end
     end
 
     -- 第四阶段：收尾，清理占位符并将结果导出到游戏世界实体列表

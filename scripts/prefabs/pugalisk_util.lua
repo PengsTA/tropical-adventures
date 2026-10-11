@@ -37,22 +37,22 @@ local function FindCurrentTarget(inst)
 
     --    print("FINDING TARGET FOR PUGALISK")
 
-    local jogador = GetClosestInstWithTag("player", inst, 40)
+    local player = GetClosestInstWithTag("player", inst, 40)
     local home = GetClosestInstWithTag("pugalisk_trap_door", inst, 120)
     local target = inst
 
     local DIST = 100      -- 40
     local WANDERDIST = 60 -- 25
 
-    if jogador and home and inst:GetDistanceSqToInst(home) < WANDERDIST * WANDERDIST and not jogador:HasTag("playerghost") then
-        target = jogador
+    if player and home and inst:GetDistanceSqToInst(home) < WANDERDIST * WANDERDIST and not player:HasTag("playerghost") then
+        target = player
     end
 
-    if jogador and not home and not jogador:HasTag("playerghost") then
-        target = jogador
+    if player and not home and not player:HasTag("playerghost") then
+        target = player
     end
 
-    if jogador and home and jogador:HasTag("playerghost") then
+    if player and home and player:HasTag("playerghost") then
         target = home
     end
 
@@ -69,7 +69,7 @@ local function FindValidPositionByFan(start_angle, radius, attempts, test_fn)
     local theta = start_angle -- radians
 
     attempts = attempts or 8
-    radius = radius or 1 --adicionei pra ve se nao da crash
+    radius = radius or 1
 
     local attempt_angle = (2 * PI) / attempts
     local tmp_angles = {}
@@ -161,18 +161,14 @@ local function findDirectionToDive(inst, target)
 end
 
 local function findsafelocation(pt, angle)
-    local finalpt = nil
-    local offset = nil
-    local range = 6
-    while not offset do
-        offset = findMoveablePosition(pt, angle * DEGREES, range, 24, true)
-        range = range + 1
+    for range = 6, 32 do
+        local offset = findMoveablePosition(pt, angle * DEGREES, range, 24, true)
+        if offset ~= nil then
+            return pt + offset
+        end
     end
-    if offset then
-        pt = pt + offset
-        finalpt = pt
-    end
-    return finalpt
+    -- Keep the current position if the surrounding area is blocked.
+    return pt
 end
 
 local function getNewBodyPosition(inst, bodies, target)
@@ -219,7 +215,7 @@ local function DetermineAction(inst)
             gazechange = 0.5
         elseif health < 0.6 then
             gazechange = 0.3
-        elseif health < 0.2 then
+        elseif health < 0.8 then
             gazechange = 0.1
         end
 

@@ -122,7 +122,7 @@ return {
         },
         {
           name = "",
-          type = "lavarenaescada",
+          type = "volcano_altar",
           shape = "rectangle",
           x = 256,
           y = 256,

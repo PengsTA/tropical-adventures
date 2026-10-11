@@ -96,9 +96,8 @@ local function fn()
 	inst.AnimState:SetBuild("frog_treefrog_build")
 	inst.AnimState:PlayAnimation("idle")
 
-	inst.Physics:ClearCollidesWith(COLLISION.BOAT_LIMITS)
-
 	MakeCharacterPhysics(inst, 1, .3)
+	inst.Physics:ClearCollidesWith(COLLISION.BOAT_LIMITS)
 
 	inst:AddTag("animal")
 	inst:AddTag("prey")
@@ -118,6 +117,7 @@ local function fn()
 	inst:AddComponent("locomotor") -- locomotor must be constructed before the stategraph
 	inst.components.locomotor.walkspeed = 4
 	inst.components.locomotor.runspeed = 8
+	inst.components.locomotor.pathcaps = { allowocean = true }
 
 	inst:AddComponent("sleeper")
 	inst.components.sleeper:SetSleepTest(ShouldSleep)
@@ -145,7 +145,7 @@ local function fn()
 	MakeTinyFreezableCharacter(inst, "frogsack")
 	MakeSmallBurnableCharacter(inst, "frogsack")
 
-	inst.sounds = sounds.poison
+	inst.sounds = sounds.base
 
 	inst:AddComponent("knownlocations")
 	inst:AddComponent("inspectable")

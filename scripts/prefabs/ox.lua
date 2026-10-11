@@ -50,7 +50,7 @@ SetSharedLootTable('oxbaby',
 	{
 		{ 'smallmeat',  1.00 },
 		{ 'smallmeat',  1.00 },
-		{ 'smallmeatt', 1.00 },
+		{ 'smallmeat',  1.00 },
 		{ 'ox_horn',    0.13 },
 	})
 
@@ -102,19 +102,15 @@ local soundsbaby =
 }
 
 local function OnEnterMood(inst)
-	if inst.components.beard and inst.components.beard.bits > 0 then
-		inst.AnimState:SetBuild("ox_heat_build")
-		inst.AnimState:SetBank("ox")
-		inst:AddTag("scarytoprey")
-	end
+	inst.AnimState:SetBuild("ox_heat_build")
+	inst.AnimState:SetBank("ox")
+	inst:AddTag("scarytoprey")
 end
 
 local function OnLeaveMood(inst)
-	if inst.components.beard and inst.components.beard.bits > 0 then
-		inst.AnimState:SetBuild("ox_build")
-		inst.AnimState:SetBank("ox")
-		inst:RemoveTag("scarytoprey")
-	end
+	inst.AnimState:SetBuild("ox_build")
+	inst.AnimState:SetBank("ox")
+	inst:RemoveTag("scarytoprey")
 end
 
 local function Retarget(inst)
@@ -267,8 +263,8 @@ local function fn(Sim)
 	inst:AddComponent("herdmember")
 	inst.components.herdmember.herdprefab = "oxherd"
 
-	-- inst:ListenForEvent("entermood", OnEnterMood)
-	-- inst:ListenForEvent("leavemood", OnLeaveMood)
+	inst:ListenForEvent("entermood", OnEnterMood)
+	inst:ListenForEvent("leavemood", OnLeaveMood)
 
 	inst:AddComponent("leader")
 	inst:AddComponent("follower")

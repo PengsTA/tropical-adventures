@@ -159,6 +159,11 @@ local function BoatParamCommon(build, inspectbuild, numslots)
             badgepos = Vector3(0, 167, 0),
             isboatinspect = true,
         },
+        hasboatequipslots = true,
+        boatcontainerequips = {
+            [BOATEQUIPSLOTS.BOAT_SAIL] = 1,
+            [BOATEQUIPSLOTS.BOAT_LAMP] = 2,
+        },
         usespecificslotsforitems = true,
         type = "chest",
         itemtestfn = boatitemtestfn,

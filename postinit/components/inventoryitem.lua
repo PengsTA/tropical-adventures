@@ -1,4 +1,36 @@
 AddComponentPostInit("inventoryitem", function(self)
+    local function SyncOwner(self, owner)
+        local props = rawget(self, "_")
+        if props ~= nil and props.owner ~= nil then
+            props.owner[1] = owner
+        else
+            rawset(self, "owner", owner)
+        end
+
+        if self.inst ~= nil and self.inst.replica ~= nil and self.inst.replica.inventoryitem ~= nil then
+            self.inst.replica.inventoryitem:SetOwner(owner)
+        end
+    end
+
+    -- Keep the component "owner" field writable on items whose replica is gone.
+    -- This avoids crashes when clearing owner for invalid/inlimbo items.
+    if type(addsetter) == "function" then
+        local props = rawget(self, "_")
+        if props ~= nil and props.owner ~= nil then
+            addsetter(self, "owner", function(owner_inst, owner)
+                local owner_props = rawget(owner_inst, "_")
+                if owner_props ~= nil and owner_props.owner ~= nil then
+                    owner_props.owner[1] = owner
+                end
+
+                local inst = owner_inst.inst
+                if inst ~= nil and inst.replica ~= nil and inst.replica.inventoryitem ~= nil then
+                    inst.replica.inventoryitem:SetOwner(owner)
+                end
+            end)
+        end
+    end
+
     self.inst:AddTag("isinventoryitem")
 
     self.inst:ListenForEvent("onremove", function()
@@ -36,6 +68,14 @@ AddComponentPostInit("inventoryitem", function(self)
 
         self.inst:PushEvent("onpickup", { owner = pickupguy })
         return self.onpickupfn and self.onpickupfn(self.inst, pickupguy, src_pos)
+    end
+
+    function self:SetOwner(owner)
+        SyncOwner(self, owner)
+    end
+
+    function self:ClearOwner()
+        SyncOwner(self, nil)
     end
 
     function self:TakeOffShelf()

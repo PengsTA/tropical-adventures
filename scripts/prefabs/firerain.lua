@@ -5,10 +5,8 @@ local assets =
 }
 
 local VOLCANO_FIRERAIN_WARNING = 2
-local VOLCANO_FIRERAIN_RADIUS = 20
 local VOLCANO_FIRERAIN_DAMAGE = 300
 local VOLCANO_FIRERAIN_LAVA_CHANCE = 0.5
-local VOLCANO_DRAGOONEGG_CHANCE = 0.25
 
 local prefabs =
 {
@@ -86,18 +84,6 @@ local function DoStep(inst)
 	ShakeAllCameras(CAMERASHAKE.FULL, .35, .02, 1.25, inst, 40)
 end
 
-local function roundToNearest(numToRound, multiple)
-	local half = multiple / 2
-	return numToRound + half - (numToRound + half) % multiple
-end
-
-local function SimulateStep(inst)
-	inst:DoTaskInTime(VOLCANO_FIRERAIN_WARNING, function(inst)
-		inst:DoStep()
-		inst:Remove()
-	end)
-end
-
 local function StartStep(inst)
 	local shadow = SpawnPrefab("firerainshadow")
 	shadow.Transform:SetPosition(inst:GetPosition():Get())
@@ -126,6 +112,8 @@ local function firerainfn(Sim)
 	anim:PlayAnimation("idle")
 
 	inst:AddTag("FX")
+	inst.persists = false
+	inst.entity:SetPristine()
 
 	if not TheWorld.ismastersim then
 		return inst
@@ -156,8 +144,6 @@ end
 
 local easing = require("easing")
 local function LerpIn(inst)
-	inst:DoTaskInTime(64 * FRAMES, function(inst) inst:Remove() end)
-
 	local s = easing.inExpo(inst:GetTimeAlive(), 1, 1 - inst.StartingScale, inst.TimeToImpact)
 
 	inst.Transform:SetScale(s, s, s)
@@ -192,6 +178,8 @@ local function shadowfn(Sim)
 	inst.entity:AddNetwork()
 
 	inst:AddTag("FX")
+	inst.persists = false
+	inst.entity:SetPristine()
 
 	if not TheWorld.ismastersim then
 		return inst
@@ -211,6 +199,7 @@ local function shadowfn(Sim)
 	inst.OnRemoveEntity = OnRemove
 
 	inst.sizeTask = inst:DoPeriodicTask(FRAMES, LerpIn)
+	inst:DoTaskInTime(VOLCANO_FIRERAIN_WARNING + 2 * FRAMES, inst.Remove)
 
 	return inst
 end

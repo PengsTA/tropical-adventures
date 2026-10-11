@@ -1,4 +1,5 @@
 local translated_prefabs = {
+    ["pog"] = "pog_spawner",
     ["sapling_sw"] = "sapling",
     ["grass_sw"] = "grass",
     ["sapling_ham"] = "sapling",
@@ -14,6 +15,10 @@ local converted_prefabs = {
     ["crab_king_waterspout"] = "splash_white_large",
     ["wave_med"] = "rogue_wave",
     ["wave_splash"] = "splash_water_wave",
+    ["sapling_sw"] = "sapling",
+    ["grass_sw"] = "grass",
+    ["sapling_ham"] = "sapling",
+    ["grass_ham"] = "grass",
 }
 
 return {

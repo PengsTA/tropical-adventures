@@ -1,4 +1,5 @@
 local relative_temperature_thresholds = { -30, -10, 10, 30 }
+local RegionDefs = require("tools/regiondefs")
 local function GetRangeForTemperature(temp, ambient)
     local range = 1
     for i, v in ipairs(relative_temperature_thresholds) do
@@ -29,39 +30,47 @@ function MakeObsidianTool(inst)
     heater:SetThermics(true, false)
 end
 
-IsInTropicalArea = function(inst)
-    -- local x, _, z = inst:GetPosition():Get()-----这个东西似乎要等待一帧
-    local x, _, z = inst.Transform:GetWorldPosition() ----这个东西也取不到值
-    return TheWorld.Map:IsTropicalAreaAtPoint(x, 0, z)
-end
-
-IsInShipwreckedArea = function(inst)
+local function GetRegionPosition(inst)
     local x, _, z = inst.Transform:GetWorldPosition()
-    return TheWorld.Map:IsShipwreckedAreaAtPoint(x, 0, z)
+    return x, z
 end
 
-IsInHamletArea = function(inst)
-    local x, _, z = inst.Transform:GetWorldPosition()
-    return TheWorld.Map:IsHamletAreaAtPoint(x, 0, z)
+IsInPrimaryRegion = function(inst, primary)
+    local x, z = GetRegionPosition(inst)
+    return TheWorld.Map:IsPrimaryRegionAtPoint(x, 0, z, primary)
 end
 
-IsInVolcanoArea = function(inst)
-    local x, _, z = inst.Transform:GetWorldPosition()
-    return TheWorld.Map:IsVolcanoAreaAtPoint(x, 0, z)
+IsInSubregion = function(inst, subregion)
+    local x, z = GetRegionPosition(inst)
+    return TheWorld.Map:IsSubregionAtPoint(x, 0, z, subregion)
 end
 
-IsInHamRoom = function(inst)
-    local x, _, z = inst.Transform:GetWorldPosition()
-    return TheWorld.Map:IsHamRoomAtPoint(x, 0, z)
+IsInTropicalRegion = function(inst)
+    local x, z = GetRegionPosition(inst)
+    return TheWorld.Map:IsTropicalRegionAtPoint(x, 0, z)
 end
 
+IsInInterior = function(inst)
+    local x, z = GetRegionPosition(inst)
+    return TheWorld.Map:IsInteriorAtPoint(x, 0, z)
+end
+
+IsInShipwreckedRegion = function(inst) return IsInPrimaryRegion(inst, RegionDefs.PRIMARY.shipwrecked) end
+IsInHamletRegion = function(inst) return IsInPrimaryRegion(inst, RegionDefs.PRIMARY.hamlet) end
+IsInShipwreckedVolcanoRegion = function(inst) return IsInSubregion(inst, RegionDefs.SUBREGION.sw_volcano) end
+
+IsInTropicalArea = IsInTropicalRegion
+IsInShipwreckedArea = IsInShipwreckedRegion
+IsInHamletArea = IsInHamletRegion
+IsInVolcanoArea = IsInShipwreckedVolcanoRegion
+IsInHamRoom = IsInInterior
 
 local old_MakeNoGrowInWinter = MakeNoGrowInWinter
 function MakeNoGrowInWinter(inst)
     inst:DoTaskInTime(0.05, function()
         if inst.Transform ~= nil then
             local x, y, z = inst.Transform:GetWorldPosition()
-            if TheWorld.Map:IsForestAreaAtPoint(x, y, z) then
+            if TheWorld.Map:IsDSTRegionAtPoint(x, y, z) then
                 old_MakeNoGrowInWinter(inst)
             end
         end
@@ -91,7 +100,7 @@ MakeSnowCovered = function(inst, ...)
     inst:DoTaskInTime(0.05, function()
         if inst.Transform ~= nil then
             local x, y, z = inst.Transform:GetWorldPosition()
-            if TheWorld.Map:IsNotForestAreaAtPoint(x, y, z) then
+            if not TheWorld.Map:IsDSTRegionAtPoint(x, y, z) then
                 ClearSnowCoveredPristine(inst)
             end
         end

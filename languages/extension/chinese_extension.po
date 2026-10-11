@@ -5520,6 +5520,31 @@ msgctxt "STRINGS.NAMES.ANTMAN2"
 msgid "红蚁人"
 msgstr "红蚁人"
 
+#. STRINGS.NAMES.ANT_WORKER
+msgctxt "STRINGS.NAMES.ANT_WORKER"
+msgid "Worker Ant"
+msgstr "工蚁"
+
+#. STRINGS.CHARACTERS.GENERIC.DESCRIBE.ANTCOMBHOMECAVENURSERY
+msgctxt "STRINGS.CHARACTERS.GENERIC.DESCRIBE.ANTCOMBHOMECAVENURSERY"
+msgid "These workers stay close to their colony."
+msgstr "这些工蚁总在巢穴附近活动。"
+
+#. STRINGS.NAMES.ANT_FORAGER
+msgctxt "STRINGS.NAMES.ANT_FORAGER"
+msgid "Forager Ant"
+msgstr "采集工蚁"
+
+#. STRINGS.NAMES.ANT_NURSERY_WORKER
+msgctxt "STRINGS.NAMES.ANT_NURSERY_WORKER"
+msgid "Nursery Ant"
+msgstr "内巢工蚁"
+
+#. STRINGS.NAMES.ANTCOMBHOMECAVENURSERY
+msgctxt "STRINGS.NAMES.ANTCOMBHOMECAVENURSERY"
+msgid "Ant Nursery"
+msgstr "内巢蚁穴"
+
 #. STRINGS.NAMES.APOKALYPSE_HERALD
 msgctxt "STRINGS.NAMES.APOKALYPSE_HERALD"
 msgid "远古先驱"

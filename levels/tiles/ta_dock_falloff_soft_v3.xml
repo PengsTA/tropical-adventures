@@ -1,0 +1,11 @@
+<Atlas>
+  <Texture filename="ta_dock_falloff_soft_v3.tex" />
+  <Elements>
+    <Element name="01" u1="0.0078125" u2="0.2421875" v1="0.515625" v2="0.973101043" variant="" />
+    <Element name="02" u1="0.2578125" u2="0.4921875" v1="0.515625" v2="0.973101043" variant="" />
+    <Element name="03" u1="0.5078125" u2="0.7421875" v1="0.515625" v2="0.973101043" variant="" />
+    <Element name="04" u1="0.7578125" u2="0.9921875" v1="0.515625" v2="0.973101043" variant="" />
+    <Element name="05" u1="0.0078125" u2="0.2421875" v1="0.015625" v2="0.459008596" variant="" />
+    <Element name="06" u1="0.2578125" u2="0.4921875" v1="0.015625" v2="0.459008596" variant="" />
+  </Elements>
+</Atlas>

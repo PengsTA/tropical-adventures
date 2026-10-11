@@ -1,3 +1,4 @@
+local BallphinFriendship = require("tools/ballphin_friendship")
 local assets =
 {
 	Asset("ANIM", "anim/ballphin.zip"),
@@ -151,6 +152,7 @@ local function fn()
 	inst.components.health:SetMaxHealth(BALLPHIN_HEALTH)
 
 	inst:AddComponent("sleeper")
+	BallphinFriendship.Configure(inst)
 
 	inst:AddComponent("lootdropper")
 	inst.components.lootdropper:SetLoot({})
@@ -231,6 +233,7 @@ local function fn1()
 	inst.components.health:SetMaxHealth(BALLPHIN_HEALTH)
 
 	inst:AddComponent("sleeper")
+	BallphinFriendship.Configure(inst)
 
 	inst:AddComponent("lootdropper")
 	inst.components.lootdropper:SetLoot({})

@@ -189,6 +189,7 @@ local function grass(name, stage)
         inst:AddTag("grasss")
         inst:AddTag("mudacamada")
         MakeInventoryPhysics(inst, nil, 0.7)
+        inst:AddTag("ignorewalkableplatforms")
 
         inst.entity:SetPristine()
 

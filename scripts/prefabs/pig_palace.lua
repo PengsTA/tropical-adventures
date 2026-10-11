@@ -13,7 +13,6 @@ local prefabs =
     "trinket_giftshop_1",
     "trinket_giftshop_3",
     "trinket_giftshop_4",
-    "grounded_wilba"
 }
 
 local function LightsOn(inst)

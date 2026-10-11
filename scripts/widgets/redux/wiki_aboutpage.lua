@@ -16,6 +16,76 @@ local function MakeDetailsLine(details_root, x, y, scale, image_override)
     value_title_line:SetPosition(x, y)
 end
 
+local function AdjustToUtf8Boundary(str, index)
+    if index <= 0 or index > #str then
+        return index
+    end
+    local b = string.byte(str, index)
+    while index > 1 and b and b >= 128 and b < 192 do
+        index = index - 1
+        b = string.byte(str, index)
+    end
+    return index
+end
+
+local function SplitTextIntoChunks(str, max_bytes)
+    max_bytes = max_bytes or 1200
+    if not str or str == "" then
+        return {}
+    end
+    if #str <= max_bytes then
+        return { str }
+    end
+
+    local chunks = {}
+    local current_chunk = {}
+    local current_bytes = 0
+
+    local function flush_chunk()
+        if #current_chunk > 0 then
+            table.insert(chunks, table.concat(current_chunk, "\n"))
+            current_chunk = {}
+            current_bytes = 0
+        end
+    end
+
+    local function add_line(line)
+        local line_bytes = #line + 1
+        if line_bytes > max_bytes then
+            flush_chunk()
+            local pos = 1
+            local total_len = #line
+            while pos <= total_len do
+                local target_end = math.min(pos + max_bytes - 1, total_len)
+                if target_end < total_len then
+                    local safe_next = AdjustToUtf8Boundary(line, target_end + 1)
+                    target_end = safe_next - 1
+                end
+                table.insert(chunks, string.sub(line, pos, target_end))
+                pos = target_end + 1
+            end
+        else
+            if current_bytes + line_bytes > max_bytes and current_bytes > 0 then
+                flush_chunk()
+            end
+            table.insert(current_chunk, line)
+            current_bytes = current_bytes + line_bytes
+        end
+    end
+
+    for line in string.gmatch(str, "([^\r\n]*)\r?\n") do
+        add_line(line)
+    end
+
+    local trailing = string.match(str, "[^\r\n]+$")
+    if trailing then
+        add_line(trailing)
+    end
+
+    flush_chunk()
+    return chunks
+end
+
 -------------------------------------------------------------------------------------------------------
 
 local is_ch = TUNING.LANGUAGE_CHINESE
@@ -85,38 +155,49 @@ function WikiAboutPage:LeftDesc()
 
     local y = 210
 
-    local about_text = left_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, "", UICOLOURS.BRONZE))
-    about_text:SetMultilineTruncatedString(desc_terms.mod_background, 100, 370)
-    local _, textH_4 = about_text:GetRegionSize()
-    y = y - textH_4 / 2 - 30
-    about_text:SetPosition(0, y)
+    -- local about_text = left_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, "", UICOLOURS.BRONZE))
+    -- about_text:SetMultilineTruncatedString(desc_terms.mod_background, 100, 370)
+    -- local _, textH_4 = about_text:GetRegionSize()
+    -- y = y - textH_4 / 2 - 30
+    -- about_text:SetPosition(0, y)
 
-    about_text = left_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
-    about_text:SetHAlign(ANCHOR_LEFT)
-    about_text:SetVAlign(ANCHOR_TOP)
-    about_text:SetMultilineTruncatedString(desc_about.str_back, 100, 370)
-    local _, textH_5 = about_text:GetRegionSize()
-    y = y - textH_4 / 2 - textH_5 / 2
-    about_text:SetPosition(0, y)
+    -- about_text = left_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
+    -- about_text:SetHAlign(ANCHOR_LEFT)
+    -- about_text:SetVAlign(ANCHOR_TOP)
+    -- about_text:SetMultilineTruncatedString(desc_about.str_back, 100, 370)
+    -- local _, textH_5 = about_text:GetRegionSize()
+    -- y = y - textH_4 / 2 - textH_5 / 2
+    -- about_text:SetPosition(0, y)
 
-    about_text = left_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, "", UICOLOURS.BRONZE))
-    about_text:SetMultilineTruncatedString(desc_terms.mod_progress, 100, 370)
-    local _, textH_0 = about_text:GetRegionSize()
+    local textH_5, textH_4 = 0, 0
+
+    local title_text = left_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, "", UICOLOURS.BRONZE))
+    title_text:SetMultilineTruncatedString(desc_terms.mod_progress, 100, 370)
+    local _, textH_0 = title_text:GetRegionSize()
     y = y - textH_5 / 2 - textH_0 / 2 - 30
-    about_text:SetPosition(0, y)
+    title_text:SetPosition(0, y)
 
-    about_text = left_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
-    about_text:SetHAlign(ANCHOR_LEFT)
-    about_text:SetVAlign(ANCHOR_TOP)
-    about_text:SetMultilineTruncatedString(desc_about.str_progress, 100, 370)
-    local _, textH_1 = about_text:GetRegionSize()
-    y = y - textH_0 / 2 - textH_1 / 2
-    about_text:SetPosition(0, y)
+    local current_bottom = y - textH_0 / 2
+    local total_body_h = 0
+    -- BitmapFontRenderer hard-caps strings at MAX_NUM_CHARS (4096 bytes).
+    -- Split changelog into smaller chunks to prevent engine buffer overflow assertion.
+    local chunks = SplitTextIntoChunks(desc_about.str_progress, 1200)
+    for _, chunk in ipairs(chunks) do
+        local chunk_widget = left_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
+        chunk_widget:SetHAlign(ANCHOR_LEFT)
+        chunk_widget:SetVAlign(ANCHOR_TOP)
+        chunk_widget:SetMultilineTruncatedString(chunk, 500, 370)
+        local _, chunk_h = chunk_widget:GetRegionSize()
+        local chunk_y = current_bottom - chunk_h / 2
+        chunk_widget:SetPosition(0, chunk_y)
+        current_bottom = current_bottom - chunk_h
+        total_body_h = total_body_h + chunk_h
+    end
 
     -- 滑动区域的宽
     local width = 450
     -- 滑动区域的高
-    local height = textH_0 + textH_1 + textH_4 + textH_5 + 300
+    local height = textH_0 + total_body_h + textH_4 + textH_5 + 300
     local PANEL_HEIGHT = 470
     -- 可视滑动区域的高
     local max_visible_height = PANEL_HEIGHT - 80 -- -20
@@ -191,11 +272,11 @@ function WikiAboutPage:RightDesc()
     y = y - textH_X / 2 - 30
     about_text:SetPosition(0, y)
 
-    local textH_3 = 150
-    about_text = right_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, desc_terms.mod_sponser,
-        UICOLOURS.BROWN_DARK))
-    y = y - textH_3
-    about_text:SetPosition(0, y)
+    local textH_3 = 0
+    -- about_text = right_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, desc_terms.mod_sponser,
+    --     UICOLOURS.BROWN_DARK))
+    -- y = y - textH_3
+    -- about_text:SetPosition(0, y)
 
     local textH_4 = 150
     about_text = right_widget:AddChild(Image("images/code.xml", "code.tex"))
@@ -203,19 +284,19 @@ function WikiAboutPage:RightDesc()
     about_text:SetPosition(0, y)
     about_text:SetScale(0.25)
 
-    local textH_5 = 100
-    about_text = right_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, desc_terms.mod_sponser_list,
-        UICOLOURS.BROWN_DARK))
-    y = y - textH_5
-    about_text:SetPosition(0, y)
+    local textH_5 = 0
+    -- about_text = right_widget:AddChild(Text(HEADERFONT, name_font_size * size_multi, desc_terms.mod_sponser_list,
+    --     UICOLOURS.BROWN_DARK))
+    -- y = y - textH_5
+    -- about_text:SetPosition(0, y)
 
-    local about_text = right_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
-    about_text:SetHAlign(ANCHOR_LEFT)
-    about_text:SetVAlign(ANCHOR_TOP)
-    about_text:SetMultilineTruncatedString(desc_about.str_donation, 200, 300)
-    local _, textH_X = about_text:GetRegionSize()
-    y = y - textH_X / 2 - 30
-    about_text:SetPosition(0, y)
+    -- local about_text = right_widget:AddChild(Text(HEADERFONT, text_font_size * size_multi, "", UICOLOURS.BROWN_DARK))
+    -- about_text:SetHAlign(ANCHOR_LEFT)
+    -- about_text:SetVAlign(ANCHOR_TOP)
+    -- about_text:SetMultilineTruncatedString(desc_about.str_donation, 200, 300)
+    -- local _, textH_X = about_text:GetRegionSize()
+    -- y = y - textH_X / 2 - 30
+    -- about_text:SetPosition(0, y)
 
 
 

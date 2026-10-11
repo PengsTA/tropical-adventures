@@ -14,7 +14,7 @@ AddComponentPostInit("penguinspawner", function(cmp)
         return print("Failed to edit penguinspawner", TryToSpawnFlock, TryToSpawnFlockForPlayer)
     else
         local newTryToSpawnFlockForPlayer = function(playerdata)
-            if playerdata.player and playerdata.player:AwareInTropicalArea() then
+            if playerdata.player and playerdata.player:AwareInTropicalRegion() then
                 return
             end
             TryToSpawnFlockForPlayer(playerdata)

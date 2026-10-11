@@ -1,6 +1,6 @@
 require "brains/antwarriorbrain"
 require "stategraphs/SGwarriorant"
-require "brains/antwarriorbrain_egg"
+local AntEcology = require("tools/antecology")
 
 local assets =
 {
@@ -18,6 +18,8 @@ local prefabs =
 {
     "monstermeat",
     "chitin",
+    "antman",
+    "antman2",
     "antman_warrior_egg"
 }
 
@@ -31,14 +33,8 @@ local ANTMAN_WARRIOR_TARGET_DIST = 16
 local ANTMAN_WARRIOR_RUN_SPEED = 7
 local ANTMAN_WARRIOR_WALK_SPEED = 3.5
 
-local ANTMAN_WARRIOR_REGEN_TIME = 34
-local ANTMAN_WARRIOR_RELEASE_TIME = 34
 
 local ANTMAN_WARRIOR_ATTACK_ON_SIGHT_DIST = 8
-
-local function ontalk(inst, script)
-    inst.SoundEmitter:PlaySound("dontstarve_DLC003/creatures/crickant/abandon")
-end
 
 local function OnAttackedByDecidRoot(inst, attacker)
     local fn = function(dude) return dude:HasTag("antman") end
@@ -63,52 +59,56 @@ local function OnAttackedByDecidRoot(inst, attacker)
 end
 
 local function OnAttacked(inst, data)
-    local attacker = data.attacker
+    local attacker = data and data.attacker
+    if attacker == nil then return end
     inst:ClearBufferedAction()
 
     if attacker.prefab == "deciduous_root" and attacker.owner then
         OnAttackedByDecidRoot(inst, attacker.owner)
     elseif attacker.prefab ~= "deciduous_root" then
-        inst.components.combat:SetTarget(attacker)
-        inst.components.combat:ShareTarget(attacker, SHARE_TARGET_DIST, function(dude) return dude:HasTag("ant") end,
-            MAX_TARGET_SHARES)
+        AntEcology.DefendColony(inst, attacker)
     end
 end
 
-local builds = { "antman_translucent_build" } -- {"antman_build"}
-
-local function is_complete_disguise(target)
-    if not target then return end
-    return target:HasTag("has_antmask") and target:HasTag("has_antsuit") or target:HasTag("antlingual")
-end
-
 local function NormalRetargetFn(inst)
-    return FindEntity(inst, ANTMAN_WARRIOR_TARGET_DIST,
-        function(guy)
-            if guy.components.health and not guy.components.health:IsDead() and inst.components.combat:CanTarget(guy) then
-                if guy:HasTag("monster") then return guy end
-                if guy:HasTag("player") and guy.components.inventory and guy:GetDistanceSqToInst(inst) < ANTMAN_WARRIOR_ATTACK_ON_SIGHT_DIST * ANTMAN_WARRIOR_ATTACK_ON_SIGHT_DIST and not guy:HasTag("antlingual") then
-                    return
-                        guy
-                end
-            end
-        end
-    )
+    return FindEntity(inst, ANTMAN_WARRIOR_TARGET_DIST, function(target)
+        return AntEcology.IsIntruder(inst, target, ANTMAN_WARRIOR_ATTACK_ON_SIGHT_DIST)
+    end)
 end
 
-local function NormalKeepTargetFn(inst, target)
-    --give up on dead guys, or guys in the dark, or werepigs
-    return inst.components.combat:CanTarget(target)
-        and (not target.LightWatcher or target.LightWatcher:IsInLight())
-        and not (target.sg and target.sg:HasStateTag("transform"))
+local function UpdateAporkalypse(inst, active)
+    if inst.components.health:IsDead() then return end
+    if not active and inst.worker_prefab then
+        AntEcology.RestoreWorker(inst)
+        return
+    end
+    local empowered = active or inst.queen_enraged
+    inst.Light:Enable(empowered == true)
+    inst.AnimState:SetBloomEffectHandle(empowered and "shaders/anim.ksh" or "")
+    inst.build = empowered and "antman_warpaint_build" or "antman_guard_build"
+    inst.AnimState:SetBuild(inst.build)
+    local percent = inst.components.health:GetPercent()
+    inst.components.health:SetMaxHealth(ANTMAN_WARRIOR_HEALTH + (empowered and 100 or 0))
+    inst.components.health:SetPercent(percent)
 end
 
-local function TransformToNormal(inst)
-    local normal = SpawnPrefab("antman")
-    normal.Transform:SetPosition(inst.Transform:GetWorldPosition())
-    inst:Remove()
+local function BindQueen(inst, queen)
+    if inst._boundqueen == queen then return end
+    if inst._boundqueen then
+        inst:RemoveEventCallback("death", inst._onqueengone, inst._boundqueen)
+        inst:RemoveEventCallback("onremove", inst._onqueengone, inst._boundqueen)
+    end
+    inst.queen = queen
+    inst._boundqueen = queen
+    local function OnQueenGone()
+        inst.queen_enraged = nil
+        inst.queen = nil
+        UpdateAporkalypse(inst, TheWorld.state.isaporkalypse)
+    end
+    inst._onqueengone = OnQueenGone
+    inst:ListenForEvent("death", OnQueenGone, queen)
+    inst:ListenForEvent("onremove", OnQueenGone, queen)
 end
-
 
 local function common()
     local inst = CreateEntity()
@@ -132,10 +132,7 @@ local function common()
     inst.entity:AddLightWatcher()
 
     inst:AddComponent("talker")
-    inst.components.talker.ontalk = ontalk
-    inst.components.talker.fontsize = 35
-    inst.components.talker.font = TALKINGFONT
-    inst.components.talker.offset = Vector3(0, -400, 0)
+    AntEcology.SetupSpeech(inst)
 
     MakeCharacterPhysics(inst, 50, .5)
 
@@ -143,6 +140,7 @@ local function common()
     inst:AddTag("character")
     inst:AddTag("antmanwarrior")
     inst:AddTag("ant")
+    inst:AddTag("insect")
     inst:AddTag("scarytoprey")
     anim:SetBank("antman")
     inst.AnimState:SetBuild(inst.build)
@@ -164,13 +162,14 @@ local function common()
     inst:AddComponent("embarker")
 
     inst:AddComponent("combat")
+    AntEcology.SetupAggro(inst)
     inst.components.combat.hiteffectsymbol = "antman_torso"
     inst.components.combat.debris_immune = true
     inst.components.combat:SetRetargetFunction(3, NormalRetargetFn)
     inst.components.combat:SetTarget(nil)
     inst.components.combat:SetDefaultDamage(ANTMAN_WARRIOR_DAMAGE)
     inst.components.combat:SetAttackPeriod(ANTMAN_WARRIOR_ATTACK_PERIOD)
-    inst.components.combat:SetKeepTargetFunction(NormalKeepTargetFn)
+    inst.components.combat:SetKeepTargetFunction(AntEcology.KeepTarget)
 
     MakeMediumBurnableCharacter(inst, "antman_torso")
 
@@ -181,8 +180,11 @@ local function common()
     ------------------------------------------
     inst:AddComponent("health")
     inst.components.health:SetMaxHealth(ANTMAN_WARRIOR_HEALTH)
+    inst.components.health.save_maxhealth = true
 
     inst:AddComponent("inventory")
+    inst:AddComponent("follower")
+    inst.components.follower.maxfollowtime = TUNING.ANTMAN_LOYALTY_MAXTIME
 
     inst:AddComponent("lootdropper")
     inst.components.lootdropper:SetLoot({})
@@ -203,85 +205,42 @@ local function common()
     ------------------------------------------
 
     inst.OnSave = function(inst, data)
-        data.build = inst.build
-
-        if inst.queen then
+        data.worker_prefab = inst.worker_prefab
+        data.worker_eattype = inst.worker_eattype
+        data.queen_enraged = inst.queen_enraged
+        if inst.queen and inst.queen:IsValid() then
             data.queen_guid = inst.queen.GUID
+            return { inst.queen.GUID }
         end
     end
-
     inst.OnLoad = function(inst, data)
         if data then
-            inst.build = data.build or builds[1]
-            inst.AnimState:SetBuild(inst.build)
+            inst.worker_prefab = data.worker_prefab
+            inst.worker_eattype = data.worker_eattype
+            AntEcology.ConfigureFriendship(inst)
+            inst.queen_enraged = data.queen_enraged
         end
     end
-
-
+    inst.OnLoadPostPass = function(inst, newents, data)
+        local queen = data and data.queen_guid and newents[data.queen_guid]
+        if queen and not queen.entity.components.health:IsDead() then
+            BindQueen(inst, queen.entity)
+        else
+            inst.queen_enraged = nil
+        end
+    end
     inst:ListenForEvent("attacked", OnAttacked)
-
-    inst.SetAporkalypse = function(enabled)
-        local player = GetClosestInstWithTag("player", inst, 30)
-        if player and enabled then
-            inst.Light:Enable(true)
-            inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
-            inst.build = "antman_warpaint_build"
-            inst.AnimState:SetBuild(inst.build)
-            inst.components.health:SetMaxHealth(ANTMAN_WARRIOR_HEALTH + 100)
-        else
-            inst.Light:Enable(false)
-            inst.AnimState:SetBloomEffectHandle("")
-            inst.build = "antman_guard_build"
-            inst.AnimState:SetBuild(inst.build)
+    inst:WatchWorldState("isaporkalypse", UpdateAporkalypse)
+    inst:ListenForEvent("antqueenbattle", function(_, data)
+        local queen = data and data.queen
+        if queen and (inst.queen == queen or inst:IsNear(queen, 30)) then
+            BindQueen(inst, queen)
+            inst.queen_enraged = true
+            UpdateAporkalypse(inst, TheWorld.state.isaporkalypse)
         end
-
-        inst.AnimState:SetBuild(inst.build)
-    end
-
-    inst:ListenForEvent("antqueenbattle", function() inst.SetAporkalypse(true) end, TheWorld)
-    --    inst:WatchWorldState("stopaporkalypse", function()
-    --        if inst:HasTag("aporkalypse_cleanup") then
-    --            if not inst:IsInLimbo() then
-    --                TransformToNormal(inst)
-    --            end
-    --        else
-    --            inst.SetAporkalypse(false)
-    --        end
-    --    end, TheWorld)
-
-    --    inst:ListenForEvent("exitlimbo", function(inst)
-    --        if inst:HasTag("aporkalypse_cleanup") and not GetAporkalypse():IsActive() then
-    --            TransformToNormal(inst)
-    --        end
-    --    end)
-
-    inst:WatchWorldState("startaporkalypse", function()
-        inst.Light:Enable(true)
-        inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
-        inst.build = "antman_warpaint_build"
-        inst.AnimState:SetBuild(inst.build)
     end, TheWorld)
-
-
-    inst:WatchWorldState("stopaporkalypse",
-        function()
-            local warrior = SpawnPrefab("antman")
-            warrior.Transform:SetPosition(inst.Transform:GetWorldPosition())
-            inst:Remove()
-        end, TheWorld)
-
-    inst:DoTaskInTime(0.2, function(inst)
-        if TheWorld.state.isaporkalypse then
-            inst.Light:Enable(true)
-            inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
-            inst.build = "antman_warpaint_build"
-            inst.AnimState:SetBuild(inst.build)
-        else
-            inst.Light:Enable(false)
-            inst.AnimState:SetBloomEffectHandle("")
-            inst.build = "antman_guard_build"
-            inst.AnimState:SetBuild(inst.build)
-        end
+    inst:DoTaskInTime(0, function()
+        UpdateAporkalypse(inst, TheWorld.state.isaporkalypse)
     end)
 
     local brain = require "brains/antwarriorbrain"

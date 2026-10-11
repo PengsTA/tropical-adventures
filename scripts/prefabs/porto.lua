@@ -20,9 +20,26 @@ local assets =
 }
 
 local function OnDeploy(boatname, postfn)
+    local function GetItemHealth(inst)
+        if inst == nil then
+            return nil
+        end
+        if inst.boat_item_health ~= nil then
+            return inst.boat_item_health
+        end
+        local finiteuses = inst.components ~= nil and inst.components.finiteuses or nil
+        return finiteuses ~= nil and (finiteuses.current or (finiteuses.GetUses ~= nil and finiteuses:GetUses())) or nil
+    end
+
     return function(inst, pt, deployer)
         pt.y = 0
         local boat = SpawnAt(boatname, pt)
+        if boat ~= nil and boat.components.boathealth ~= nil then
+            local health = GetItemHealth(inst)
+            if health ~= nil then
+                boat.components.boathealth:SetCurrentHealth(health)
+            end
+        end
         if postfn then postfn(boat) end
         inst:Remove()
     end

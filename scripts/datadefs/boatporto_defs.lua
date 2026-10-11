@@ -1,4 +1,70 @@
-local function OnDrop(prefab)
+local OnDrop
+
+local function GetItemHealth(item)
+    if item == nil then
+        return nil
+    end
+
+    if item.boat_item_health ~= nil then
+        return item.boat_item_health
+    end
+
+    local finiteuses = item.components ~= nil and item.components.finiteuses or nil
+    return finiteuses ~= nil and (finiteuses.current or (finiteuses.GetUses ~= nil and finiteuses:GetUses())) or nil
+end
+
+local function ClampItemHealth(health, maxuses)
+    return math.max(1, math.min(math.floor((health or maxuses or 1) + .5), maxuses or math.huge))
+end
+
+local function SetBoatHealthFromItem(boat, item)
+    if boat ~= nil and boat.components.boathealth ~= nil then
+        boat.components.boathealth:SetCurrentHealth(GetItemHealth(item))
+    end
+end
+
+local function SetItemHealth(item, health, maxuses)
+    if item ~= nil and health ~= nil then
+        item.boat_item_health = ClampItemHealth(health, maxuses)
+        local finiteuses = item.components ~= nil and item.components.finiteuses or nil
+        if finiteuses ~= nil then
+            local uses = ClampItemHealth(item.boat_item_health, finiteuses.total or finiteuses.maxuses or finiteuses.max or maxuses or nil)
+            if finiteuses.SetUses ~= nil then
+                finiteuses:SetUses(uses)
+            else
+                finiteuses.current = uses
+            end
+        end
+    end
+end
+
+local function OnSave(inst, data)
+    data.boat_item_health = GetItemHealth(inst)
+end
+
+local function OnLoad(inst, data)
+    if data ~= nil and data.boat_item_health ~= nil then
+        if inst.SetBoatItemHealth ~= nil then
+            inst.SetBoatItemHealth(inst, data.boat_item_health)
+        else
+            SetItemHealth(inst, data.boat_item_health, nil)
+        end
+    end
+end
+
+local function MakePortableBoatPostFn(maxuses, prefab)
+    return function(inst)
+        inst.boat_item_health = maxuses
+        inst.SetBoatItemHealth = function(item, health)
+            SetItemHealth(item, health, maxuses)
+        end
+        inst.OnSave = OnSave
+        inst.OnLoad = OnLoad
+        inst.components.inventoryitem:SetOnDroppedFn(OnDrop(prefab))
+    end
+end
+
+OnDrop = function(prefab)
     return function(inst)
         local map = TheWorld.Map
         -- local x, y, z = inst.Transform:GetWorldPosition()
@@ -8,9 +74,7 @@ local function OnDrop(prefab)
 
         if TileGroupManager:IsOceanTile(ground) then
             local boat = SpawnAt(prefab, pt)
-            if boat then
-                boat.components.finiteuses.current = inst.components.finiteuses.current
-            end
+            SetBoatHealthFromItem(boat, inst)
             return inst:Remove()
         end
 
@@ -25,13 +89,7 @@ return {
         prefab = "corkboat",
         bank = "corkboat",
         build = "corkboat",
-        postfn = function(inst)
-            inst:AddComponent("finiteuses")
-            inst.components.finiteuses:SetMaxUses(80)
-            inst.components.finiteuses:SetUses(80)
-            inst.components.finiteuses:SetOnFinished(inst.Remove)
-            inst.components.inventoryitem:SetOnDroppedFn(OnDrop("corkboat"))
-        end,
+        postfn = MakePortableBoatPostFn(80, "corkboat"),
         placer_bank = "rowboat",
         placer_build = "coracle_boat_build",
     },
@@ -119,13 +177,7 @@ return {
         prefab = "surfboard",
         bank = "surfboard",
         build = "surfboard",
-        postfn = function(inst)
-            inst:AddComponent("finiteuses")
-            inst.components.finiteuses:SetMaxUses(100)
-            inst.components.finiteuses:SetUses(100)
-            inst.components.finiteuses:SetOnFinished(inst.Remove)
-            inst.components.inventoryitem:SetOnDroppedFn(OnDrop("surfboard"))
-        end,
+        postfn = MakePortableBoatPostFn(100, "surfboard"),
         placer_bank = "raft",
         placer_build = "raft_surfboard_build",
     },

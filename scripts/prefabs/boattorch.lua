@@ -4,39 +4,16 @@ local assets =
     Asset("INV_IMAGE", "boat_torch_off"),
 }
 
+local BoatEquip = require("tools/boat_equipment_helper")
+
 local BOAT_TORCH_LIGHTTIME = 60 * 1.75
 
 local prefabs =
 {
-    "lanternlight",
+    "boat_torch_light",
 }
 
-local function DoTurnOffSound(inst, owner)
-    inst._soundtask = nil
-    (owner ~= nil and owner:IsValid() and owner.SoundEmitter or inst.SoundEmitter):PlaySound(
-        "dontstarve/wilson/lantern_off")
-end
-
-local function PlayTurnOffSound(inst)
-    if inst._soundtask == nil and inst:GetTimeAlive() > 0 then
-        inst._soundtask = inst:DoTaskInTime(0, DoTurnOffSound, inst.components.inventoryitem.owner)
-    end
-end
-
-local function PlayTurnOnSound(inst)
-    if inst._soundtask ~= nil then
-        inst._soundtask:Cancel()
-        inst._soundtask = nil
-    elseif not POPULATING then
-        if not inst._light.SoundEmitter:PlayingSound("torch") then
-            inst._light.SoundEmitter:PlaySound("dontstarve_DLC002/common/boatlantern_lp", "torch")
-        end
-
-        inst._light.SoundEmitter:PlaySound("dontstarve/wilson/torch_swing")
-    end
-end
-
-local function fuelupdate(inst)
+local function FuelUpdate(inst)
     if inst._light ~= nil then
         local fuelpercent = inst.components.fueled:GetPercent()
         inst._light.Light:SetIntensity(Lerp(.4, .6, fuelpercent))
@@ -45,119 +22,129 @@ local function fuelupdate(inst)
     end
 end
 
-local function onremovelight(light)
-    light._lantern._light = nil
+local function SetSwapSymbol(inst, symbol)
+    inst.symbol = symbol
+    inst.AnimState:OverrideSymbol("swap_lantern", inst.build, symbol)
+
+    local boat = BoatEquip.GetItemBoat(inst)
+    if boat ~= nil and boat.components.boatequipment ~= nil then
+        boat.components.boatequipment:UpdateVisuals()
+    end
 end
 
-local function liga(inst)
-    if not inst.components.fueled:IsEmpty() then
-        inst.components.fueled:StartConsuming()
-
-        local owner = inst.components.inventoryitem.owner
-
-        if inst._light == nil then
-            inst._light = SpawnPrefab("lanternlight")
-            inst._light._lantern = inst
-            inst:ListenForEvent("onremove", onremovelight, inst._light)
-            fuelupdate(inst)
-            PlayTurnOnSound(inst)
+local function RemoveLight(inst)
+    if inst._light ~= nil then
+        if inst._light:IsValid() then
+            inst._light:Remove()
         end
+        inst._light = nil
+    end
+end
+
+local function TurnOn(inst)
+    if inst.components.fueled:IsEmpty() then
+        inst.components.equippable:ToggleOff()
+        return
+    end
+
+    inst.SoundEmitter:PlaySound("dontstarve/wilson/torch_swing")
+    if not inst.SoundEmitter:PlayingSound("boatlamp") then
+        inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/boatlantern_lp", "boatlamp")
+    end
+
+    inst.components.fueled:StartConsuming()
+    if inst._light == nil or not inst._light:IsValid() then
+        inst._light = SpawnPrefab("boat_torch_light")
+        if inst._light ~= nil then
+            FuelUpdate(inst)
+        end
+    end
+
+    local owner = inst.components.inventoryitem.owner
+    if inst._light ~= nil then
         inst._light.entity:SetParent((owner or inst).entity)
-        inst.AnimState:OverrideSymbol("swap_lantern", "swap_torch_boat", "swap_lantern")
-        inst.components.inventoryitem:ChangeImageName("boat_torch")
-        if inst.navio then inst.navio.AnimState:OverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
     end
+    SetSwapSymbol(inst, "swap_lantern")
+    inst.components.inventoryitem:ChangeImageName("boat_torch")
 end
 
-local function desliga(inst)
+local function TurnOff(inst)
+    inst.SoundEmitter:KillSound("boatlamp")
+    if inst:GetTimeAlive() > 0 then
+        inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/boatlantern_turnoff")
+    end
+
     inst.components.fueled:StopConsuming()
-
-    if inst._light ~= nil then
-        inst._light:Remove()
-        PlayTurnOffSound(inst)
-    end
+    SetSwapSymbol(inst, "swap_lantern_off")
+    RemoveLight(inst)
     inst.components.inventoryitem:ChangeImageName("boat_torch_off")
-    inst.AnimState:OverrideSymbol("swap_lantern", "swap_torch_boat", "swap_lantern_off")
-    if inst.navio then inst.navio.AnimState:OverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
 end
 
+local function SetBoatLightEnabled(inst, enabled)
+    if enabled then
+        if inst.components.fueled:IsEmpty() then
+            if inst.components.equippable:IsToggledOn() then
+                inst.components.equippable:ToggleOff()
+            end
+            return
+        end
 
-local function OnRemove(inst)
-    if inst._light ~= nil then
-        inst._light:Remove()
-    end
-    if inst._soundtask ~= nil then
-        inst._soundtask:Cancel()
+        if not inst.components.equippable:IsToggledOn() then
+            inst.components.equippable:ToggleOn()
+        elseif not inst.components.fueled.consuming or inst._light == nil then
+            TurnOn(inst)
+        end
+    elseif inst.components.equippable:IsToggledOn() or inst.components.fueled.consuming or inst._light ~= nil then
+        inst.components.equippable:ToggleOff()
     end
 end
 
-local function apaga(inst)
+local function OnBoatEquipped(inst)
+    SetBoatLightEnabled(inst, true)
+end
+
+local function OnBoatUnequipped(inst)
+    SetBoatLightEnabled(inst, false)
+end
+
+local function OnDropped(inst)
+    SetBoatLightEnabled(inst, false)
+end
+
+local function OnDepleted(inst)
+    inst.components.equippable:ToggleOff()
     inst:Remove()
 end
 
-local function nofuel(inst)
-    if inst.navio then inst.navio.AnimState:ClearOverrideSymbol(inst.symboltooverride, inst.build, inst.symbol) end
-    inst.navio = nil
-    inst:RemoveTag("ligado")
-    desliga(inst)
-end
---------------------------------------------------------------------------
-
-local function OnLightWake(inst)
-    if not inst.SoundEmitter:PlayingSound("loop") then
-        inst.SoundEmitter:PlaySound("dontstarve/wilson/lantern_LP", "loop")
-    end
-end
-
-local function OnLightSleep(inst)
-    inst.SoundEmitter:KillSound("loop")
-end
-
---------------------------------------------------------------------------
-
-local function OnSave(inst, data)
-    if inst:HasTag("ligado") then data.luz = 1 end
+local function OnSave(inst)
+    return { was_on = inst.components.fueled.consuming }
 end
 
 local function OnLoad(inst, data)
-    if data and data.luz ~= nil then
-        inst:AddTag("ligado")
-        liga(inst)
-    end
+    inst.components.equippable:ToggleOff()
 end
 
-local function mudasimbolo(inst)
-    ---------verifica se ta dentro do navio--------------
-    -- local barco = GetClosestInstWithTag("boatsw", inst, 0.5)
-    -- local player = GetClosestInstWithTag("player", inst, 0.5)
-    -- if not barco then
-    --     print("barco111111111111")
-    --     if inst:HasTag("nonavio") then inst:RemoveTag("nonavio") end
-    --     return
-    -- end
-    -- if barco and player and inst.components.inventoryitem:IsHeldBy(player) then
-    --     print("barco22222222")
-    --     if inst:HasTag("nonavio") then inst:RemoveTag("nonavio") end
-    --     return
-    -- end
-    -- if barco then
-    --     print("barco333333333333333333333333")
-    --     if not inst:HasTag("nonavio") then inst:AddTag("nonavio") end
-    -- end
-    if not inst.components.inventoryitem.owner or not inst.components.inventoryitem.owner:HasTag("boatsw") then
-        inst:RemoveTag("ligado")
+local function MakeBoatTorchLight()
+    local inst = CreateEntity()
+    inst.entity:AddTransform()
+    inst.entity:AddLight()
+    inst.entity:AddNetwork()
+
+    inst.Light:SetColour(200 / 255, 200 / 255, 50 / 255)
+    inst.Light:SetRadius(5)
+    inst.Light:SetIntensity(.6)
+    inst.Light:SetFalloff(.9)
+    inst.Light:Enable(true)
+
+    inst:AddTag("FX")
+    inst:AddTag("NOCLICK")
+    inst.entity:SetPristine()
+
+    if TheWorld.ismastersim then
+        inst.persists = false
     end
 
-
-
-
-    if inst:HasTag("ligado") then
-        inst.symbol = "swap_lantern"
-        liga(inst)
-    else
-        inst.symbol = "swap_lantern_off"
-        desliga(inst)
-    end
+    return inst
 end
 
 local function fn()
@@ -167,14 +154,11 @@ local function fn()
     inst.entity:AddAnimState()
     inst.entity:AddSoundEmitter()
     inst.entity:AddNetwork()
-    --  MakeInventoryFloatable(inst, "idle_water", "idle")
+
     inst.build = "swap_torch_boat"
-    inst.symbol = "swap_lantern"
+    inst.symbol = "swap_lantern_off"
     inst.symboltooverride = "swap_lantern"
-    inst.navio = nil
-
     MakeInventoryPhysics(inst)
-
     inst.AnimState:SetBank("torch_boat")
     inst.AnimState:SetBuild("swap_torch_boat")
     inst.AnimState:PlayAnimation("idle")
@@ -193,30 +177,39 @@ local function fn()
     inst:AddComponent("interactions")
 
     inst:AddComponent("inventoryitem")
+    inst.components.inventoryitem:ChangeImageName("boat_torch_off")
+    inst.components.inventoryitem:SetOnDroppedFn(OnDropped)
 
-
+    inst:AddComponent("equippable")
+    inst.components.equippable.boatequipslot = BOATEQUIPSLOTS.BOAT_LAMP
+    inst.components.equippable.restrictedtag = "ta_boat_equipment"
+    inst.components.equippable:SetOnEquip(OnBoatEquipped)
+    inst.components.equippable:SetOnUnequip(OnBoatUnequipped)
+    inst.components.equippable.togglable = true
+    inst.components.equippable.toggledonfn = TurnOn
+    inst.components.equippable.toggledofffn = TurnOff
 
     inst:AddComponent("fueled")
-
     inst.components.fueled.fueltype = FUELTYPE.CAVE
     inst.components.fueled:InitializeFuelLevel(BOAT_TORCH_LIGHTTIME)
-    inst.components.fueled:SetDepletedFn(apaga)
-    inst.components.fueled:SetUpdateFn(fuelupdate)
+    inst.components.fueled:SetDepletedFn(OnDepleted)
+    inst.components.fueled:SetUpdateFn(FuelUpdate)
     inst.components.fueled:SetFirstPeriod(TUNING.TURNON_FUELED_CONSUMPTION, TUNING.TURNON_FULL_FUELED_CONSUMPTION)
     inst.components.fueled.accepting = true
 
     inst._light = nil
+    inst.SetBoatLightEnabled = SetBoatLightEnabled
 
     MakeHauntableLaunch(inst)
 
-    inst.OnRemoveEntity = OnRemove
-    inst:ListenForEvent("onpickup", nofuel)
-    inst:DoPeriodicTask(0.5, mudasimbolo)
-
-    inst.OnLoad = OnLoad
+    inst.OnRemoveEntity = RemoveLight
+    inst:ListenForEvent("boatequipped", OnBoatEquipped)
+    inst:ListenForEvent("boatunequipped", OnBoatUnequipped)
     inst.OnSave = OnSave
+    inst.OnLoad = OnLoad
 
     return inst
 end
 
-return Prefab("common/inventory/boat_torch", fn, assets)
+return Prefab("common/inventory/boat_torch", fn, assets, prefabs),
+    Prefab("boat_torch_light", MakeBoatTorchLight)

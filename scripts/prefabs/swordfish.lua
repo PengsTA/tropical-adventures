@@ -39,7 +39,6 @@ end
 local function KeepTarget(inst, target)
     local shouldkeep = inst.components.combat:CanTarget(target)
     local onwater = target:HasTag("aquatic")
-    --local onboat = target.components.driver and target.components.driver:GetIsDriving()
     return shouldkeep and onwater
 end
 

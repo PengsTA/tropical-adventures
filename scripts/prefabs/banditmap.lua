@@ -8,7 +8,7 @@ local assets =
 
 }
 
-local tesouroescondido =
+local treasure_loot =
 {
 	[1] = "tfwp_healing_staff",
 	[2] = "purplegem",
@@ -101,7 +101,7 @@ local tesouroescondido =
 }
 
 
-local tesouroescondidoham =
+local hamlet_treasure_loot =
 {
 	[1] = "goldnugget",
 	[2] = "armor_metalplate",
@@ -115,32 +115,24 @@ local tesouroescondidoham =
 
 
 local function onunwrapped(inst, pos, doer)
-	local map = TheWorld.Map
-	local x, y
-	local sx, sy = map:GetSize()
-
-	repeat
-		x = math.random(-sx, sx)
-		y = math.random(-sy, sy)
-		local tile = map:GetTileAtPoint(x, 0, y)
-	until
-		tile ~= GROUND.IMPASSABLE and
-		tile ~= GROUND.OCEAN_COASTAL and
-		tile ~= GROUND.OCEAN_COASTAL_SHORE and
-		tile ~= GROUND.OCEAN_SWELL and
-		tile ~= GROUND.OCEAN_ROUGH and
-		tile ~= GROUND.OCEAN_BRINEPOOL and
-		tile ~= GROUND.OCEAN_BRINEPOOL_SHORE and
-		tile ~= GROUND.OCEAN_HAZARDOUS
+	if doer == nil or not doer:IsValid() or doer.components.inventory == nil then
+		return
+	end
+	local x, y = require("tools/land_search").Find(TheWorld.Map, 1, doer:GetPosition())
+	if x == nil then
+		return
+	end
 
 	SpawnPrefab("bandittreasure").Transform:SetPosition(x, 0, y)
 
 	doer:DoTaskInTime(0, function()
-		doer.player_classified.MapExplorer:RevealArea(x, 0, y)
+		if doer.player_classified ~= nil then
+			doer.player_classified.MapExplorer:RevealArea(x, 0, y)
+		end
 		doer.components.inventory:GiveItem(SpawnPrefab("papyrus"))
 	end)
 
-	if doer.player_classified.revealtreasure then
+	if doer.player_classified ~= nil and doer.player_classified.revealtreasure then
 		local val = (x + 16384) * 65536 + (y + 16384)
 		doer.player_classified.revealtreasure:set_local(val)
 		doer.player_classified.revealtreasure:set(val)
@@ -215,8 +207,6 @@ local function onfinishcallback(inst, worker)
 
 
 
-	------------------------vai vir um desses 50% de chance pra cada-------------------------
-	-----pode vir até 9 moedas----------------------
 	for i = 1, 20 do
 		if math.random() > 0.5 then
 			local single = SpawnPrefab("oinc")
@@ -224,28 +214,26 @@ local function onfinishcallback(inst, worker)
 		end
 	end
 
-	-----pode vir até 8 tesouros----------------------
 	for i = 1, 4 do
 		if math.random() > 0.5 then
-			local single = SpawnPrefab(tesouroescondido[math.random(1, 88)])
+			local single = SpawnPrefab(treasure_loot[math.random(1, #treasure_loot)])
 			chest.components.container:GiveItem(single)
 		end
 	end
 
 	for i = 1, 4 do
 		if math.random() > 0.5 then
-			local single = SpawnPrefab(tesouroescondidoham[math.random(1, 8)])
+			local single = SpawnPrefab(hamlet_treasure_loot[math.random(1, #hamlet_treasure_loot)])
 			chest.components.container:GiveItem(single)
 		end
 	end
 
 
-	-----pode vir até 3 monstros----------------------
-	local tipo = math.random(1, 2)
+	local creature_type = math.random(1, 2)
 
 	for i = 1, 4 do
 		if math.random() > 0.5 then
-			if tipo == 1 then
+			if creature_type == 1 then
 				local single = SpawnPrefab("scorpion")
 				chest.components.container:GiveItem(single)
 			else

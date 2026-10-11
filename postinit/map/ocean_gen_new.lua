@@ -6,10 +6,13 @@ require "map/terrain"
 
 local obj_layout = require("map/object_layout")
 local PrefabSwaps = require("prefabswaps")
+local OceanWrap = require("tools/ocean_wrap")
 local world = nil
+local boundary_displaced = nil
 
 function Ocean_SetWorldForOceanGen(w)
 	world = w
+	boundary_displaced = nil
 end
 
 local WORLD_TILES = WORLD_TILES
@@ -342,6 +345,11 @@ local function AddShoreline(width, height, data)
 end
 
 local function do_void_outline(width, height, data)
+	local wrapped
+	wrapped, boundary_displaced = OceanWrap.GenerateBoundary(world, width, height, IsWaterTile)
+	if wrapped then
+		return
+	end
 	print("[Ocean] Void Outline...")
 
 	local function calc_next(s, tunings)
@@ -473,7 +481,9 @@ local function checkTile(x, y, populating_tile, ignore_reserverd)
 	return (ignore_reserverd or not world:IsTileReserved(x, y)) and world:GetTile(x, y) == populating_tile
 end
 
-function GetRandomWaterPoints(populating_tile, width, height, edge_dist, needed)
+function GetRandomWaterPoints(populating_tile, width, height, edge_dist, needed, testfn)
+	if needed <= 0 or width <= 2 * edge_dist or height <= 2 * edge_dist then return {}, {} end
+	local seen = {}
 	local get_points = function(points, width, height, edge_dist, needed, inc)
 		local adj_width, adj_height = width - 2 * edge_dist, height - 2 * edge_dist
 		local start_x, start_y = math.random(0, adj_width), math.random(0, adj_height)
@@ -482,10 +492,12 @@ function GetRandomWaterPoints(populating_tile, width, height, edge_dist, needed)
 			local y = ((start_y + j) % adj_height) + edge_dist
 			while i < adj_width and #points < needed do
 				local x = ((start_x + i) % adj_width) + edge_dist
-				--local ground = world:GetTile(x, y)
-				--if checkFn(ground, x, y) then
-				if checkTile(x, y, populating_tile) then
-					table.insert(points, { x = x, y = y })
+				local key = y * width + x
+				if not seen[key] and checkTile(x, y, populating_tile) then
+					seen[key] = true
+					if testfn == nil or testfn(x, y) then
+						table.insert(points, { x = x, y = y })
+					end
 				end
 				i = i + inc
 			end
@@ -533,6 +545,7 @@ local function findLayoutPositions(size, edge_dist, populating_tile, count, min_
 
 	local width, height = world:GetWorldSize()
 	local adj_width, adj_height = width - 2 * edge_dist - size, height - 2 * edge_dist - size
+	if adj_width <= 0 or adj_height <= 0 then return positions end
 	local start_x, start_y = math.random(0, adj_width), math.random(0, adj_height)
 	local i, j = 0, 0
 
@@ -603,7 +616,10 @@ end
 
 local function PlaceOceanLayout(layout, prefabs, populating_tile, ReserveAndPlaceLayoutFn, min_dist_from_land)
 	local layoutsize = GetLayoutSize(layout, prefabs)
-	local positions = findLayoutPositions(layoutsize, OCEAN_WATERFALL_MAX_DIST + 2, populating_tile, 1,
+	local edge_dist = OCEAN_WATERFALL_MAX_DIST + 2
+	local width, height = world:GetWorldSize()
+	if OceanWrap.CanGenerate(width, height) then edge_dist = OceanWrap.BAND_TILES + 1 end
+	local positions = findLayoutPositions(layoutsize, edge_dist, populating_tile, 1,
 		min_dist_from_land)
 	if #positions > 0 then
 		local pos = math.random(#positions)
@@ -706,64 +722,101 @@ function Ocean_PlaceSetPieces(set_pieces, add_entity, obj_layout, populating_til
 	return total
 end
 
+local function CanPlaceOceanEntity(prefab, x, y, tile, entities, width, height, contents)
+	return prefab ~= nil and checkTile(x, y, tile)
+		and OceanWrap.CanPlacePrefab(prefab, x, y, width, height)
+		and SpawnUtil.AddEntityCheckFilter(prefab, tile)
+		and SpawnUtil.AddEntityCheck(prefab, x, y, entities, contents.prefabspawnfn)
+end
+
+local function AddOceanEntity(prefab, x, y, tile, entities, width, height, prefab_list, prefab_data, contents)
+	if not CanPlaceOceanEntity(prefab, x, y, tile, entities, width, height, contents) then return false end
+	PopulateWorld_AddEntity(prefab, x, y, tile, entities, width, height, prefab_list, prefab_data)
+	return true
+end
+
+local function PopulateOceanCount(prefab, count, tile, entities, width, height, edge_dist, prefab_list, contents)
+	count = math.floor(count)
+	local data = { data = contents.prefabdata and contents.prefabdata[prefab] }
+	local points_x = GetRandomWaterPoints(tile, width, height, edge_dist, count, function(x, y)
+		-- Commit each accepted point before testing the next, so spacing rules see it.
+		return AddOceanEntity(prefab, x, y, tile, entities, width, height, prefab_list, data, contents)
+	end)
+	local added = #points_x
+	if added < count then
+		print("[Tropical Adventures] No suitable ocean positions:", prefab, added, "of", count)
+	end
+end
+
+local function RelocateDisplacedLandEntities(entities, width, height)
+	if boundary_displaced == nil or next(boundary_displaced) == nil then return end
+	local destinations = {}
+	local function FindTile(x, y, tile)
+		local bx = math.clamp(x, OceanWrap.BAND_TILES, width - OceanWrap.BAND_TILES - 1)
+		local by = math.clamp(y, OceanWrap.BAND_TILES, height - OceanWrap.BAND_TILES - 1)
+		local function Available(cx, cy)
+			if cx >= OceanWrap.BAND_TILES and cx < width - OceanWrap.BAND_TILES
+				and cy >= OceanWrap.BAND_TILES and cy < height - OceanWrap.BAND_TILES
+				and world:GetTile(cx, cy) == tile and not world:IsTileReserved(cx, cy) then
+				world:ReserveTile(cx, cy)
+				return { cx, cy }
+			end
+		end
+		for radius = 0, 16 do
+			for offset = -radius, radius do
+				local dest = Available(bx + offset, by - radius) or Available(bx + offset, by + radius)
+					or Available(bx - radius, by + offset) or Available(bx + radius, by + offset)
+				if dest then return dest end
+			end
+		end
+	end
+	for prefab, list in pairs(entities) do
+		for i = #list, 1, -1 do
+			local ent = list[i]
+			local x = math.floor(ent.x / TILE_SCALE + width / 2)
+			local y = math.floor(ent.z / TILE_SCALE + height / 2)
+			local key = y * width + x
+			local tile = boundary_displaced[key]
+			if tile ~= nil then
+				if destinations[key] == nil then destinations[key] = FindTile(x, y, tile) or false end
+				local dest = destinations[key]
+				if dest then
+					ent.x = ent.x + (dest[1] - x) * TILE_SCALE
+					ent.z = ent.z + (dest[2] - y) * TILE_SCALE
+				else
+					print("[Ocean] No land destination for boundary entity", prefab)
+					table.remove(list, i)
+				end
+			end
+		end
+	end
+	boundary_displaced = nil
+end
+
 function PopulateWaterPrefabWorldGenCustomizations(populating_tile, spawnFn, entitiesOut, width, height, edge_dist,
 												   water_contents, world_gen_choices, prefab_list)
 	-- this is populating extra entities based on worldgen customization
 	--	print("[Ocean] Populate water extras...")
-
-	local amount_to_generate = {}
-	local pos_needed = 0
 
 	if world_gen_choices == nil then
 		return
 	end
 
 	for prefab, amt in pairs(world_gen_choices) do
-		if not PrefabSwaps.IsPrefabInactive(prefab) then
-			if prefab_list[prefab] then
-				amount_to_generate[prefab] = math.floor(prefab_list[prefab] * amt) - prefab_list[prefab]
-				pos_needed = pos_needed + amount_to_generate[prefab]
+		if type(amt) == "number" and not PrefabSwaps.IsPrefabInactive(prefab) and prefab_list[prefab] then
+			local count = math.floor(prefab_list[prefab] * amt) - prefab_list[prefab]
+			if count > 0 then
+				PopulateOceanCount(prefab, count, populating_tile, entitiesOut, width, height, edge_dist,
+					prefab_list, water_contents)
 			end
 		end
 	end
-
-	--print("generate_these, before", pos_needed)
-	--dumptable(prefab_list, 1, 2)
-	--dumptable(generate_these, 1, 2)
-
-	local points_x, points_y = GetRandomWaterPoints(populating_tile, width, height, edge_dist, pos_needed)
-
-	for idx = 1, math.min(#points_x, pos_needed) do
-		local prefab = spawnFn.pickspawnprefab(amount_to_generate, populating_tile)
-
-		if prefab ~= nil then
-			local prefab_data = {}
-			prefab_data.data = water_contents.prefabdata and water_contents.prefabdata[prefab] or nil
-			PopulateWorld_AddEntity(prefab, points_x[idx], points_y[idx], populating_tile, entitiesOut, width, height,
-				prefab_list, prefab_data)
-
-			amount_to_generate[prefab] = amount_to_generate[prefab] - 1
-
-			-- Remove any complete items from the list
-			if amount_to_generate[prefab] <= 0 then
-				--print("Generated enough",prefab)
-				amount_to_generate[prefab] = nil
-			end
-		end
-	end
-
-	--print("generate_these, after", pos_needed)
-	--dumptable(prefab_list, 1, 2)
 end
 
 local function PopulateWaterType(populating_tile, spawnFn, entitiesOut, width, height, edge_dist, water_contents,
 								 world_gen_choices, min_dist_from_land, encoded_topology)
-	--add IsTileReserved check back in
-
 	local prefab_list = {}
 	local setpiece_prefab_list = {}
-	local generate_these = {}
-	local pos_needed = 0
 
 	assert(edge_dist < width)
 	assert(edge_dist < height)
@@ -786,26 +839,9 @@ local function PopulateWaterType(populating_tile, spawnFn, entitiesOut, width, h
 			if type(count) == "function" then
 				count = count()
 			end
-			generate_these[prefab] = count
-			pos_needed = pos_needed + count
-		end
-
-		--get a bunch of points
-		local points_x, points_y = GetRandomWaterPoints(populating_tile, width, height, edge_dist, 2 * pos_needed + 10)
-
-		local pos_cur = 1
-		for prefab, count in pairs(generate_these) do
-			local added = 0
-			while added < count and pos_cur <= #points_x do
-				if terrain.filter[prefab] == nil or not table.contains(terrain.filter[prefab], populating_tile) then
-					local prefab_data = {}
-					prefab_data.data = water_contents.prefabdata and water_contents.prefabdata[prefab] or nil
-					PopulateWorld_AddEntity(prefab, points_x[pos_cur], points_y[pos_cur], populating_tile, entitiesOut,
-						width, height, prefab_list, prefab_data)
-					added = added + 1
-				end
-
-				pos_cur = pos_cur + 1
+			if count > 0 then
+				PopulateOceanCount(prefab, count, populating_tile, entitiesOut, width, height, edge_dist,
+					prefab_list, water_contents)
 			end
 		end
 	end
@@ -819,8 +855,8 @@ local function PopulateWaterType(populating_tile, spawnFn, entitiesOut, width, h
 						if prefab ~= nil then
 							local prefab_data = {}
 							prefab_data.data = water_contents.prefabdata and water_contents.prefabdata[prefab] or nil
-							PopulateWorld_AddEntity(prefab, x, y, populating_tile, entitiesOut, width, height,
-								prefab_list, prefab_data)
+							AddOceanEntity(prefab, x, y, populating_tile, entitiesOut, width, height,
+								prefab_list, prefab_data, water_contents)
 						end
 					end
 				end
@@ -843,9 +879,15 @@ function PopulateOcean(spawnFn, entitiesOut, width, height, ocean_contents, worl
 					   encoded_topology)
 	print("[Ocean] Populating the ocean with lots of fun things to do...")
 
+	local edge_dist = OCEAN_POPULATION_EDGE_DIST
+	if OceanWrap.CanGenerate(width, height) then
+		encoded_topology.ta_ocean_wrap = OceanWrap.VERSION
+		edge_dist = OceanWrap.GUARD_TILES
+		RelocateDisplacedLandEntities(entitiesOut, width, height)
+	end
 	if ocean_contents ~= nil then
 		for i, room in ipairs(ocean_contents) do
-			PopulateWaterType(room.data.value, spawnFn, entitiesOut, width, height, OCEAN_POPULATION_EDGE_DIST,
+			PopulateWaterType(room.data.value, spawnFn, entitiesOut, width, height, edge_dist,
 				room.data.contents, world_gen_choices, min_dist_from_land, encoded_topology)
 		end
 	end

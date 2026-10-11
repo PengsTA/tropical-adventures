@@ -210,7 +210,6 @@ if CLIENT_SIDE then
         ))
         self.sea2land_spinner:SetTooltip('按住F1拖动')
 
-        self:MoveToBack()
         self:StartUpdating()
     end)
 
@@ -313,6 +312,7 @@ if CLIENT_SIDE then
 
     AddClassPostConstruct("widgets/statusdisplays", function(self)
         self.sea2land_spinner = self:AddChild(Sea2landSpinner())
+        self.sea2land_spinner:MoveToBack()
         self.sea2land_spinner:Hide()
     end)
 end

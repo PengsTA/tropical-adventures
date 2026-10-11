@@ -43,6 +43,10 @@ local function fn(Sim)
 
     MakeInventoryFloatable(inst)
 
+    inst:AddTag("hammer")
+    inst:AddTag("fixable_crusher")
+    inst.entity:SetPristine()
+
     if not TheWorld.ismastersim then
         return inst
     end
@@ -50,8 +54,6 @@ local function fn(Sim)
 
     inst:AddComponent("weapon")
     inst.components.weapon:SetDamage(TUNING.HAMMER_DAMAGE)
-    inst:AddTag("hammer")
-    inst:AddTag("fixable_crusher")
 
 
     -----

@@ -308,7 +308,6 @@ local function entrance()
 		---------------------------cria a parede inicio------------------------------------------------------------------	
 		local y = 0
 
-		x, z = math.floor(x) + 0.5, math.floor(z) + 0.5 --matching with normal walls
 		inst.Transform:SetPosition(x, 0, z)
 
 		--tamanho do mapa	

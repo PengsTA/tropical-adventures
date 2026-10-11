@@ -1,6 +1,7 @@
 --------------------------------------------------------------------------
 --[[ GlowflySpawner class definition ]]
 --------------------------------------------------------------------------
+local ClimateProfiles = require("tools/climateprofiles")
 
 return Class(function(self, inst)
     assert(TheWorld.ismastersim, "GlowflySpawner should not exist on client")
@@ -33,42 +34,41 @@ return Class(function(self, inst)
         local x, y, z = player.Transform:GetWorldPosition()
         local flowers = TheSim:FindEntities(x, y, z, rad, FLOWER_TAGS)
 
-        for i, v in ipairs(flowers) do
-            while v ~= nil and player:GetDistanceSqToInst(v) <= mindistance do
-                table.remove(flowers, i)
-                v = flowers[i]
+        local candidates = {}
+        for _, flower in ipairs(flowers) do
+            if flower:IsValid() and player:GetDistanceSqToInst(flower) > mindistance then
+                candidates[#candidates + 1] = flower
             end
         end
 
-        return next(flowers) ~= nil and flowers[math.random(1, #flowers)] or nil
+        return #candidates > 0 and candidates[math.random(#candidates)] or nil
     end
 
     local function SpawnGlowflyForPlayer(player, reschedule)
+        _scheduledtasks[player] = nil
+        if not _updating or not player:IsValid() then return end
         local pt = player:GetPosition()
-        if not TheWorld.Map:IsHamletAreaAtPoint(pt.x, pt.y, pt.z) then
-            return
-        end
-        local ents = TheSim:FindEntities(pt.x, pt.y, pt.z, 64, GLOWFLY_TAGS)
-        if #ents < _maxglowflies then
+        if TheWorld.Map:IsPrimaryRegionAtPoint(pt.x, pt.y, pt.z, "hamlet")
+            and #TheSim:FindEntities(pt.x, pt.y, pt.z, 64, GLOWFLY_TAGS) < _maxglowflies then
             local spawnflower = GetSpawnPoint(player)
             if spawnflower ~= nil then
                 local glowfly = SpawnPrefab("glowfly")
-                if glowfly.components.pollinator ~= nil then
-                    glowfly.components.pollinator:Pollinate(spawnflower)
+                if glowfly ~= nil then
+                    if glowfly.components.pollinator ~= nil then
+                        glowfly.components.pollinator:Pollinate(spawnflower)
+                    end
+                    if glowfly.components.homeseeker ~= nil then
+                        glowfly.components.homeseeker:SetHome(spawnflower)
+                    end
+                    glowfly.Physics:Teleport(spawnflower.Transform:GetWorldPosition())
                 end
-                if glowfly.components.homeseeker ~= nil then
-                    glowfly.components.homeseeker:SetHome(spawnflower)
-                end
-                -- KAJ: TODO: Butterflies can be despawned before getting to the rest of the logic if this is above the homeseeker
-                glowfly.Physics:Teleport(spawnflower.Transform:GetWorldPosition())
             end
         end
-        _scheduledtasks[player] = nil
         reschedule(player)
     end
 
     local function ScheduleSpawn(player, initialspawn)
-        if _scheduledtasks[player] == nil then
+        if _updating and player:IsValid() and _scheduledtasks[player] == nil then
             local basedelay = initialspawn and 0.3 or 10
             _scheduledtasks[player] = player:DoTaskInTime(basedelay + math.random() * 10, SpawnGlowflyForPlayer,
                 ScheduleSpawn)
@@ -83,7 +83,9 @@ return Class(function(self, inst)
     end
 
     local function ToggleUpdate(force)
-        if not _worldstate.isnight and not _worldstate.iswinter and _maxglowflies > 0 then
+        if not _worldstate.isnight
+            and not ClimateProfiles.IsHamletHumid(_worldstate)
+            and _maxglowflies > 0 then
             if not _updating then
                 _updating = true
                 for i, v in ipairs(_activeplayers) do
@@ -150,7 +152,7 @@ return Class(function(self, inst)
 
     --Register events
     inst:WatchWorldState("isnight", ToggleUpdate)
-    inst:WatchWorldState("iswinter", ToggleUpdate)
+    inst:WatchWorldState("season", ToggleUpdate)
     inst:ListenForEvent("ms_playerjoined", OnPlayerJoined, TheWorld)
     inst:ListenForEvent("ms_playerleft", OnPlayerLeft, TheWorld)
 
@@ -160,6 +162,16 @@ return Class(function(self, inst)
 
     function self:OnPostInit()
         ToggleUpdate(true)
+    end
+
+    function self:OnRemoveFromEntity()
+        _updating = false
+        for player in pairs(_scheduledtasks) do CancelSpawn(player) end
+        inst:StopWatchingWorldState("isnight", ToggleUpdate)
+        inst:StopWatchingWorldState("season", ToggleUpdate)
+        inst:RemoveEventCallback("ms_playerjoined", OnPlayerJoined, TheWorld)
+        inst:RemoveEventCallback("ms_playerleft", OnPlayerLeft, TheWorld)
+        for glowfly in pairs(_glowflies) do self:StopTracking(glowfly) end
     end
 
     --------------------------------------------------------------------------

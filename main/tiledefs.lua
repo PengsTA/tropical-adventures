@@ -148,7 +148,7 @@ tro_tiledefs = {
         },
         ground_tile_def  = {
             name = "sw/water_medium", ----- "water_medium"
-            noise_texture = "ham/water_lilypond2",
+            noise_texture = "ham/water_lilypond",
             flashpoint_modifier = 250,
             ocean_depth = "SHALLOW",
             colors = LILYPOND_SHORE_OCEAN_COLOR, ----有了这个就会有边缘的瀑布效果--而且不能改颜色？

@@ -33,6 +33,14 @@ local function onpickedfn(inst, picker)
     inst:AddTag("NOCLICK")
 end
 
+local function reveal(inst)
+    inst.hidden = false
+    inst:Show()
+    inst:RemoveTag("NOCLICK")
+    inst.AnimState:PlayAnimation("appear")
+    inst.AnimState:PushAnimation("buried")
+end
+
 local function onload(inst, data)
     if data then
         if data.hidden then
@@ -40,7 +48,8 @@ local function onload(inst, data)
             inst:Hide()
             inst:AddTag("NOCLICK")
             if data.waitingfortide then
-                beginTideCheckTask(inst)
+                -- This world uses seasonal flooding instead of ocean tides.
+                reveal(inst)
             end
         else
             inst.hidden = false
@@ -87,7 +96,7 @@ local function fn(Sim)
     inst.components.pickable.picksound = "dontstarve_DLC002/common/shell_harvest"
     inst.components.pickable:SetUp("seashell", SEASHELL_REGEN_TIME)
     inst.components.pickable.onpickedfn = onpickedfn
-    -- inst.components.pickable.onregenfn = onregenfn
+    inst.components.pickable.onregenfn = reveal
     inst.components.pickable.quickpick = true
     inst.components.pickable.wildfirestarter = false
     --inst.hidden = true

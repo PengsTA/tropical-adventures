@@ -101,6 +101,17 @@ end
 
 local EXPLODE_CANT_TAGS = {"INLIMBO", "outofreach", "DECOR"}
 
+local function launch_away(inst, position)
+     if inst.Physics == nil then
+          return
+     end
+     local x, y, z = inst.Transform:GetWorldPosition()
+     inst.Physics:Teleport(x, y + 0.1, z)
+     local px, py, pz = position:Get()
+     local angle = (180 - inst:GetAngleToPoint(px, py, pz)) * DEGREES
+     inst.Physics:SetVel(8 * math.cos(angle), 12, 8 * math.sin(angle))
+end
+
 local function WaterExplode(position, rad)
      local x, y, z = position:Get()
      local ent = TheSim:FindEntities(x, y, z, rad, nil, EXPLODE_CANT_TAGS)

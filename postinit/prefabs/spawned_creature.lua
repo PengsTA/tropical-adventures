@@ -1,7 +1,11 @@
 local creatures = require("datadefs/creature_spawn_defs").creatures
-for i, v in ipairs(creatures) do
+for _, v in pairs(creatures) do
     local prefabname = v.checkname or v.prefab
-    AddPrefabPostInit(prefabname, function(inst)
+    local function AddPopulationTag(inst)
         inst:AddTag("spawned_" .. prefabname)
-    end)
+    end
+    AddPrefabPostInit(v.prefab, AddPopulationTag)
+    if v.checkname ~= nil and v.checkname ~= v.prefab then
+        AddPrefabPostInit(v.checkname, AddPopulationTag)
+    end
 end

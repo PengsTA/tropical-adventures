@@ -12,6 +12,19 @@ local events=
 
 local states=
 {
+    State{
+        name = "charging",
+        tags = { "busy", "open", "charging" },
+        onenter = function(inst)
+            inst.AnimState:PlayAnimation("open_pre")
+            inst.AnimState:PushAnimation("open_loop", true)
+            inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_open")
+            inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_lp", "bermuda_charge")
+        end,
+        onexit = function(inst)
+            inst.SoundEmitter:KillSound("bermuda_charge")
+        end,
+    },
 	State{
 		name = "idle",
 		tags = {"idle"},
@@ -25,7 +38,7 @@ local states=
 
         timeline=
         {
-            TimeEvent(14*FRAMES, function(inst) inst.SoundEmitter:PlaySound("ia/common/bermuda/sparks_inactive", "idle") end),
+            TimeEvent(14*FRAMES, function(inst) inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_sparks_inactive", "idle") end),
         },
 
 		events =
@@ -42,7 +55,7 @@ local states=
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("open_loop")
 			-- since we can jump right to the open state, retrigger this sound.
-			inst.SoundEmitter:PlaySound("ia/common/bermuda/lp", "wormhole_open")
+			inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_lp", "wormhole_open")
 		end,
 
 		onexit = function(inst)
@@ -51,8 +64,8 @@ local states=
 
         timeline=
         {
-            TimeEvent(2*FRAMES, function(inst) inst.SoundEmitter:PlaySound("ia/common/bermuda/sparks_active") end),
-            TimeEvent(42*FRAMES, function(inst) inst.SoundEmitter:PlaySound("ia/common/bermuda/sparks_active") end),
+            TimeEvent(2*FRAMES, function(inst) inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_sparks_active") end),
+            TimeEvent(42*FRAMES, function(inst) inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_sparks_active") end),
         },
 
 		events =
@@ -68,7 +81,7 @@ local states=
 		tags = {"busy", "open"},
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("open_pre")
-			inst.SoundEmitter:PlaySound("ia/common/bermuda/open", "wormhole_opening")
+			inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_open", "wormhole_opening")
 		end,
 
 		events=
@@ -84,7 +97,7 @@ local states=
 		tags = {"busy"},
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("open_pst")
-			inst.SoundEmitter:PlaySound("ia/common/bermuda/close", "wormhole_closing")
+			inst.SoundEmitter:PlaySound("dontstarve_DLC002/common/bermudatriangle_close", "wormhole_closing")
 		end,
 
 		events=

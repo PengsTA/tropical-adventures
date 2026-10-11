@@ -1,5 +1,7 @@
 Assets =
 {
+    Asset("IMAGE", MODROOT .. "levels/tiles/ta_dock_falloff_compact.tex"),
+    Asset("FILE", MODROOT .. "levels/tiles/ta_dock_falloff_compact.xml"),
 
 
 	-------------------animation----------------
@@ -28,11 +30,18 @@ Assets =
 	Asset("ANIM", "anim/player_actions_machete.zip"),
 	Asset("ANIM", "anim/player_actions_shear.zip"),
 	Asset("ANIM", "anim/player_actions_cropdust.zip"),
+	Asset("ANIM", "anim/altar_meter.zip"),
 
 	--bfb
 	Asset("ANIM", "anim/player_actions_bucked.zip"),
 	Asset("ANIM", "anim/player_teleport_bfb.zip"),
 	Asset("ANIM", "anim/player_teleport_bfb2.zip"),
+	Asset("ANIM", "anim/player_portal_shipwrecked.zip"),
+	Asset("ANIM", "anim/player_portal_hamlet.zip"),
+	Asset("ANIM", "anim/wormhole_shipwrecked.zip"),
+	Asset("ANIM", "anim/portal_hamlet.zip"),
+	Asset("ANIM", "anim/portal_hamlet_build.zip"),
+	Asset("ANIM", "anim/wormhole_hamlet.zip"),
 
 	Asset("ANIM", "anim/ripple_build.zip"),
 

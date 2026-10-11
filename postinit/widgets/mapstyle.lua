@@ -14,9 +14,9 @@ local BLENDMODE = {
 }
 
 local function GetCurrentRegion(player)
-    if player:AwareInShipwreckedArea() then
+    if player:AwareInShipwreckedRegion() then
         return REGIONS.shipwrecked
-    elseif player:AwareInHamletArea() then
+    elseif player:AwareInHamletRegion() then
         return REGIONS.hamlet
     end
     return REGIONS.default

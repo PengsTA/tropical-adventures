@@ -6,7 +6,7 @@ local BOAT_TYPES = {
         maxuses = 500,
         loottable = { "boards", "boards", "boards", "rope", "seashell", "seashell", "seashell", "seashell", "seashell" },
         collapse = "flotsam_armoured_build",
-        useamount = 0.00862, -- Updated value
+        useamount = 0.00862,
     },
     cargoboat = {
         name = "cargoboat",
@@ -15,7 +15,7 @@ local BOAT_TYPES = {
         maxuses = 300,
         loottable = { "boards", "boards", "boards", "rope" },
         collapse = "flotsam_cargo_build",
-        useamount = 0.00625, -- Updated value
+        useamount = 0.00625,
     },
     corkboat = {
         name = "corkboat",
@@ -24,8 +24,7 @@ local BOAT_TYPES = {
         maxuses = 80,
         loottable = { "cork" },
         collapse = "flotsam_lograft_build",
-        tags = { "pegabarco" },
-        useamount = 0.00468, -- Not specified in your code snippet
+        useamount = 0.00468,
     },
     encrustedboat = {
         name = "encrustedboat",
@@ -34,7 +33,7 @@ local BOAT_TYPES = {
         maxuses = 800,
         loottable = { "limestone", "limestone", "boards", "boards", "boards" },
         collapse = "flotsam_encrusted_build",
-        useamount = 0.0100, -- Updated value
+        useamount = 0.0100,
     },
     lograft_old = {
         name = "lograft_old",
@@ -44,8 +43,7 @@ local BOAT_TYPES = {
         maxuses = 150,
         loottable = { "log", "log", "log", "cutgrass", "cutgrass" },
         collapse = "flotsam_lograft_build",
-        onfinished = true,
-        useamount = 0.00468, -- Updated value
+        useamount = 0.00468,
     },
     woodlegsboat = {
         name = "woodlegsboat",
@@ -54,7 +52,7 @@ local BOAT_TYPES = {
         maxuses = 500,
         loottable = { "boards", "boards", "dubloon", "dubloon" },
         collapse = "flotsam_rowboat_build",
-        useamount = 0.00468, -- Updated value
+        useamount = 0.00468,
     },
     raft_old = {
         name = "raft_old",
@@ -64,8 +62,7 @@ local BOAT_TYPES = {
         maxuses = 150,
         loottable = { "vine", "bamboo", "bamboo" },
         collapse = "flotsam_bamboo_build",
-        onfinished = true,
-        useamount = 0.00468, -- Updated value
+        useamount = 0.00468,
     },
     rowboat = {
         name = "rowboat",
@@ -74,7 +71,7 @@ local BOAT_TYPES = {
         maxuses = 250,
         loottable = { "boards", "vine", "vine" },
         collapse = "flotsam_rowboat_build",
-        useamount = 0.00781, -- Updated value
+        useamount = 0.00781,
     },
     surfboard = {
         name = "surfboard",
@@ -84,29 +81,23 @@ local BOAT_TYPES = {
         maxuses = 100,
         loottable = { "seashell" },
         collapse = "flotsam_surfboard_build",
-        onfinished = true,
-        tags = { "pegabarco", "surfboard" },
-        useamount = 0.00312, -- Updated value
+        tags = { "surfboard" },
+        useamount = 0.00312,
     },
     shadowwaxwell_boat = {
         name = "shadowwaxwell_boat",
         build = "waxwell_shadowboat_build",
         icon = "shadowboat.tex",
         maxuses = 150,
-        armor = 0,
         loottable = { "log" },
         collapse = "flotsam_shadowwaxwell_boat_build",
-        useamount = .0, -- Updated value
+        useamount = 0,
         postfn = function(inst)
-            inst.AnimState:SetMultColour(0, 0, 0, .4)
-        end,
-        postfn_proxy = function(inst)
             inst.AnimState:SetMultColour(0, 0, 0, .4)
         end,
     },
 }
 
--- 设置元表以实现默认访问
 local mt = {
     __index = function(t, k)
         return rawget(t, k) or BOAT_TYPES.rowboat

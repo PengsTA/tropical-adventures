@@ -17,6 +17,9 @@ local KNIGHTBOAT_RADIUS = 1.5
 local KNIGHTBOAT_DAMAGE = 50
 local CANNONBOAT_RADIUS = 4
 local CANNONBOAT_DAMAGE = 50
+local OBSIDIAN_CANNONBOAT_RADIUS = 9
+local OBSIDIAN_CANNONBOAT_DAMAGE = 350
+local OBSIDIAN_CANNONBOAT_BUILDINGDAMAGE = 15
 
 
 
@@ -254,10 +257,22 @@ local function onthrowncannonobsidian(inst, thrower, pt, time_to_target)
 	inst.Physics:CollidesWith(COLLISION.ITEMS)
 end
 
-local function OnHitWater(inst, attacker, target)
+local function OnHitObsidian(inst, attacker, target)
+	local pos = inst:GetPosition()
 	inst.SoundEmitter:KillSound("hiss")
-	SpawnPrefab("obsidiancoconadeactive").Transform:SetPosition(inst.Transform:GetWorldPosition())
-	inst.SoundEmitter:PlaySound("dontstarve/common/dropwood")
+	inst.components.explosive:OnBurnt()
+
+	if TheWorld.Map:IsOceanAtPoint(pos.x, pos.y, pos.z) then
+		local splash = SpawnPrefab("bombsplash")
+		SpawnWavesSW(inst, 4, 360, 6, nil, nil, 2, true, true)
+		splash.Transform:SetPosition(pos.x, pos.y, pos.z)
+		inst.SoundEmitter:PlaySound("dontstarve_DLC002/creatures/seacreature_movement/splash_large")
+	else
+		inst.SoundEmitter:PlaySound("dontstarve/common/blackpowder_explo")
+		local explode = SpawnPrefab("explode_small")
+		explode.Transform:SetPosition(pos.x, pos.y, pos.z)
+	end
+
 	inst:Remove()
 end
 
@@ -284,13 +299,18 @@ local function fnobsidian(Sim)
 		return inst
 	end
 
+	inst:AddComponent("explosive")
+	inst.components.explosive.explosivedamage = OBSIDIAN_CANNONBOAT_DAMAGE
+	inst.components.explosive.explosiverange = OBSIDIAN_CANNONBOAT_RADIUS
+	inst.components.explosive.buildingdamage = OBSIDIAN_CANNONBOAT_BUILDINGDAMAGE
+	inst.components.explosive.skip_camera_flash = true
 
 	inst:AddComponent("complexprojectile")
 	inst.components.complexprojectile:SetHorizontalSpeed(18)
 	inst.components.complexprojectile:SetGravity(-25)
 	inst.components.complexprojectile:SetLaunchOffset(Vector3(.25, 3, 0))
 	inst.components.complexprojectile:SetOnLaunch(onthrowncannonobsidian)
-	inst.components.complexprojectile:SetOnHit(OnHitWater)
+	inst.components.complexprojectile:SetOnHit(OnHitObsidian)
 
 	inst.persists = false
 

@@ -1,9 +1,52 @@
-AddModRPCHandler("ham_room", "build_height", function(player, height)
-    TUNING.BUILD_HEIGHT = height
-end)
+local InteriorBuildHeight = require "tools/interior_build_height"
+AddModRPCHandler("ham_room", "build_height", InteriorBuildHeight.SetPlayerHeight)
 
-local roomtype = TUNING.HAMROOM.roomtype
 local roomcamera = TUNING.HAMROOM.roomcamera
+local InteriorRender = require "tools/interior_render"
+
+local function UpdateRoomFocus(camera)
+    local player = ThePlayer
+    local center = player ~= nil and player._inhamroomcamea ~= nil and player._inhamroomcamea:value() or nil
+    if center ~= nil and center:IsValid() then
+        local x, _, z = center.Transform:GetWorldPosition()
+        InteriorRender.EnsureBounds(x, z)
+        camera.inhamroom = true
+        camera.hamroomcenter = center
+        camera.hamroompos = Vector3(x, 0, z)
+    else
+        camera.inhamroom = false
+        camera.hamroomcenter = nil
+        camera.hamroompos = nil
+    end
+end
+local CAMERA_PROFILE_NAMES = require("tools/room_camera_profiles").ProfileNames
+
+local function GetRoomKind(center)
+    local kind = center ~= nil and center._ta_camera_kind ~= nil and center._ta_camera_kind:value() or ""
+    if kind ~= "" then
+        return kind
+    end
+    local id = center ~= nil and center._ta_camera_profile ~= nil and center._ta_camera_profile:value() or 0
+    return CAMERA_PROFILE_NAMES[id] or "default"
+end
+
+local function GetRoomViewKey(center)
+    local width = center ~= nil and center._ta_width ~= nil and center._ta_width:value() or 0
+    local depth = center ~= nil and center._ta_depth ~= nil and center._ta_depth:value() or 0
+    return GetRoomKind(center) .. ":" .. width .. ":" .. depth
+end
+
+local function GetCameraProfile(center)
+    local profile_id = center ~= nil and center._ta_camera_profile ~= nil
+        and center._ta_camera_profile:value()
+        or 0
+    local profile_name = CAMERA_PROFILE_NAMES[profile_id] or "default"
+    return roomcamera.profiles[GetRoomKind(center)] or roomcamera.profiles[profile_name] or roomcamera.profiles.default
+end
+
+local function GetRoomDistance(profile, distance_offset)
+    return math.max(roomcamera.minimum_distance, profile.distance + distance_offset)
+end
 
 local function BindKey(key, func)
     if type(key) == "string" then
@@ -13,37 +56,47 @@ local function BindKey(key, func)
     end
 end
 
-local extra_distance = 0
-local fov_keys = TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.room_view_key] or TUNING.tro_pairedkey["mp"]
-BindKey(fov_keys[2], function() extra_distance = math.min(math.max(extra_distance + 0.1, -5), 5) end)
-BindKey(fov_keys[1], function() extra_distance = math.min(math.max(extra_distance - 0.1, -5), 5) end)
+local room_view_distance_offsets = {}
+local function AdjustRoomDistance(delta)
+    local player = ThePlayer
+    local center = player ~= nil and player._inhamroomcamea ~= nil and player._inhamroomcamea:value() or nil
+    if center == nil or not center:IsValid() or player.Transform == nil then
+        return
+    end
+    local width = center._ta_width ~= nil and center._ta_width:value() or 0
+    local depth = center._ta_depth ~= nil and center._ta_depth:value() or 0
+    local x, _, z = center.Transform:GetWorldPosition()
+    local player_x, _, player_z = player.Transform:GetWorldPosition()
+    if width <= 0 or depth <= 0 or math.abs(player_x - x) > width * 0.5 or math.abs(player_z - z) > depth * 0.5 then
+        return
+    end
+    local key = GetRoomViewKey(center)
+    room_view_distance_offsets[key] = math.max(-20, math.min(50, (room_view_distance_offsets[key] or 0) + delta))
+end
+local room_view_keys = TUNING.tro_pairedkey[TA_CONFIG.PERSONAL.room_view_key] or TUNING.tro_pairedkey["mp"]
+BindKey(room_view_keys[2], function() AdjustRoomDistance(0.5) end)
+BindKey(room_view_keys[1], function() AdjustRoomDistance(-0.5) end)
 
 AddClassPostConstruct("cameras/followcamera", function(self)
     local Old_Apply = self.Apply
     function self:Apply()
+        UpdateRoomFocus(self)
         if self.inhamroom == true and self.hamroompos ~= nil then
-            ----视角调整
-            -- if TheInput:IsKeyDown(KEY_EQUALS) then
-            --     extra_distance = extra_distance + 0.05
-            -- elseif TheInput:IsKeyDown(KEY_MINUS) then
-            --     extra_distance = extra_distance - 0.05
-            -- end
-
-            -- extra_distance = math.min(math.max(extra_distance, -5), 5)
-
             if not self.originalheading then
                 self.originalheading = self.headingtarget
             end
 
-            self.headingtarget = 0 ----此项记录原始视角,也和方向控制有关
+            self.headingtarget = 0
 
-            local cameraset = roomcamera[self.roomtype or "small"]
-            local pitch = cameraset.pitch * DEGREES
+            local profile = GetCameraProfile(self.hamroomcenter)
+            local pitch = roomcamera.pitch * DEGREES
             local heading = 0
-            local distance = cameraset.distance
+            local fov = roomcamera.fov
+            local distance = GetRoomDistance(profile, room_view_distance_offsets[GetRoomViewKey(self.hamroomcenter)] or 0)
 
-            local currentpos = Vector3(self.hamroompos:Get()) + Vector3(cameraset.pos, 0, 0)
-            local fov = 35 + extra_distance ----直接修改fov视角就不会乱
+            local currentpos = Vector3(self.hamroompos:Get())
+            currentpos.x = currentpos.x - (profile.focus_back_offset or roomcamera.focus_back_offset)
+            currentpos.y = currentpos.y + (roomcamera.height_offset or 0)
             local currentscreenxoffset = 0
             local cos_pitch = math.cos(pitch)
             local cos_heading = math.cos(heading)
@@ -111,18 +164,7 @@ end)
 
 local function OnFocalFocusDirty(inst)
     if ThePlayer ~= nil and inst == ThePlayer then
-        if inst._inhamroomcamea:value() ~= nil then
-            local ent = inst._inhamroomcamea:value()
-            TheCamera.inhamroom = true
-            local x1, y1, z1 = ent.Transform:GetWorldPosition()
-
-            TheCamera.roomtype = roomtype[ent.prefab] or "small"
-            TheCamera.hamroompos = Vector3(x1 + 2, 0, z1)
-        else
-            TheCamera.inhamroom = false
-            TheCamera.hamroompos = nil
-            TheCamera.roomtype = "small"
-        end
+        UpdateRoomFocus(TheCamera)
         if inst.components.playervision then
             inst.components.playervision:UpdateCCTable()
         end
@@ -131,10 +173,13 @@ end
 
 --Load
 local function OnFocusCamera(inst)
-    if inst.spawnanddelete_hamroom then ---------------------------额个东西是啥
+    if inst.spawnanddelete_hamroom then
         return
     end
-    local ent = FindEntity(inst, 30, nil, { "interior_center" })
+    local manager = TheWorld.components.interior_manager
+    local x, _, z = inst.Transform:GetWorldPosition()
+    local room = manager ~= nil and manager:GetRoomAtPoint(x, z) or nil
+    local ent = room ~= nil and manager.room_centers[room.id] or nil
     if ent then
         if inst._inhamroomcamea:value() ~= ent then
             inst._inhamroomcamea:set(ent)
@@ -145,7 +190,6 @@ local function OnFocusCamera(inst)
 end
 
 AddPlayerPostInit(function(inst)
-    --房子的net
     inst._inhamroomcamea = net_entity(inst.GUID, "_inhamroomcamea", "inhamroomcameadirty")
 
     if TheWorld.ismastersim then

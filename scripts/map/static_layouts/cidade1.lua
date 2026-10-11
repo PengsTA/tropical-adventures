@@ -293,7 +293,7 @@ return {
         {
           id = 182,
           name = "",
-          type = "pig_shop_produce_entrance",
+          type = "pig_shop_produce",
           shape = "rectangle",
           x = 1924,
           y = 288,
@@ -436,7 +436,7 @@ return {
         {
           id = 211,
           name = "",
-          type = "pig_shop_hoofspa_entrance",
+          type = "pig_shop_hoofspa",
           shape = "rectangle",
           x = 1724,
           y = 1440,
@@ -579,7 +579,7 @@ return {
         {
           id = 243,
           name = "",
-          type = "pig_shop_general_entrance",
+          type = "pig_shop_general",
           shape = "rectangle",
           x = 1540,
           y = 1916,
@@ -696,7 +696,7 @@ return {
         {
           id = 283,
           name = "",
-          type = "pig_shop_florist_entrance",
+          type = "pig_shop_florist",
           shape = "rectangle",
           x = 1724,
           y = 1056,
@@ -787,7 +787,7 @@ return {
         {
           id = 315,
           name = "",
-          type = "pig_academy_entrance",
+          type = "pig_shop_academy",
           shape = "rectangle",
           x = 388,
           y = 764,
@@ -826,7 +826,7 @@ return {
         {
           id = 323,
           name = "",
-          type = "pig_shop_bank_entrance",
+          type = "pig_shop_bank",
           shape = "rectangle",
           x = 480,
           y = 580,
@@ -891,7 +891,7 @@ return {
         {
           id = 414,
           name = "",
-          type = "pig_shop_deli_entrance",
+          type = "pig_shop_deli",
           shape = "rectangle",
           x = 772,
           y = 380,
@@ -1554,7 +1554,7 @@ return {
         {
           id = 604,
           name = "",
-          type = "pig_shop_cityhall_entrance",
+          type = "pig_shop_cityhall",
           shape = "rectangle",
           x = 1280,
           y = 1792,

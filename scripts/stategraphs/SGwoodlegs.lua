@@ -260,13 +260,8 @@ local states =
 
 
             if inst:HasTag("aquatic") then
-                if inst.components.driver then
-                    local barcoinv = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.BARCO)
-                    if barcoinv then
-                        barcoinv:Remove()
-                    end
-                    inst:RemoveComponent("rowboatwakespawner")
-                    inst.components.driver:StopUpdating()
+                if inst.components.sailor ~= nil then
+                    inst.components.sailor:ForceDisembark("death")
                 end
             end
         end,

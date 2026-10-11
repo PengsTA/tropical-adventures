@@ -1,9 +1,14 @@
 GLOBAL.setmetatable(env, { __index = function(t, k) return GLOBAL.rawget(GLOBAL, k) end })
 
-
+GLOBAL.BOATEQUIPSLOTS = GLOBAL.BOATEQUIPSLOTS or {
+    BOAT_SAIL = "sail",
+    BOAT_LAMP = "lamp",
+}
 
 local require = require
 local modimport = modimport
+
+modimport "main/ta_config"
 
 modimport "main/strings"
 
@@ -22,10 +27,11 @@ modimport "main/recipe_tabs"
 modimport "main/recipes"
 modimport "main/cooking_recipes"
 modimport "main/smelting_recipes"
-modimport "main/skins"
+modimport "scripts/tools/skinsapi"
 modimport "main/characters"
 modimport "main/tropical_fx"
 modimport "main/rpc"
+modimport "main/ta_seaworthy_setup"
 modimport "main/usercommands"
 
 modimport "main/AddIronLordHandlers" -- 活性机甲处理

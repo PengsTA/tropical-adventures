@@ -1,3 +1,7 @@
 sound/DLC003_AMB_stream.fsb
 adventures.code-workspace
 dstpub.json
+__pycache__/
+/.dev/
+/dstpub.json
+/AGENTS.md

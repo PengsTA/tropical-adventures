@@ -2,6 +2,8 @@
 --[[ Dependencies ]]
 --------------------------------------------------------------------------
 local easing = require("easing")
+local ClimateProfiles = require("tools/climateprofiles")
+local RegionDefs = require("tools/regiondefs")
 
 
 --------------------------------------------------------------------------
@@ -16,6 +18,10 @@ return Class(function(self, inst)
 
 	local HASSLER_SPAWN_DIST = 40
 	local HASSLER_KILLED_DELAY_MULT = 4
+	local function GetWorldTimeSeconds()
+		local state = TheWorld.state
+		return ((state.cycles or 0) + (state.time or 0)) * TUNING.TOTAL_DAY_TIME
+	end
 
 	--------------------------------------------------------------------------
 	--[[ Public Member Variables ]]
@@ -43,19 +49,32 @@ return Class(function(self, inst)
 	local _activeplayers = {}
 
 	local _lastTwisterKillDay = nil
+	local _lastWorldTime = GetWorldTimeSeconds()
 
 	--------------------------------------------------------------------------
 	--[[ Private member functions ]]
 	--------------------------------------------------------------------------
 
 	local function CanSpawnTwister()
-		return (TheWorld.state.isspring == true) and TheWorld.state.cycles > TUNING.NO_BOSS_TIME and
+		return ClimateProfiles.IsShipwreckedHurricane(TheWorld.state) and TheWorld.state.cycles > TUNING.NO_BOSS_TIME and
 			(_numSpawned < _targetNum or
 				(not _lastTwisterKillDay or ((TheWorld.state.cycles - _lastTwisterKillDay) > TUNING.NO_BOSS_TIME)))
 	end
 
+	local function GetTwisterSubregion(player)
+		local regionaware = player.components.regionaware
+		local subregion = regionaware ~= nil and regionaware:GetSubregion() or nil
+		if subregion == "sw_vanilla"
+			or subregion == "ham_rainforest"
+			or subregion == "ham_wilds" then
+			return subregion
+		end
+	end
+
 	local function IsEligible(player)
-		return player:IsValid() and player:AwareInTropicalArea() and not player:AwareInCityArea()
+		return player:IsValid()
+			and not player:AwareInInterior()
+			and GetTwisterSubregion(player) ~= nil
 	end
 
 	local function PickPlayer()
@@ -81,15 +100,24 @@ return Class(function(self, inst)
 		--print("Picked player ", _targetplayer)
 	end
 
-	local function GetSpawnPoint(pt)
+	local function GetSpawnPoint(pt, subregion)
 		if not TheWorld.Map:IsAboveGroundAtPoint(pt:Get()) then
 			pt = FindNearbyLand(pt, 1) or pt
 		end
-		local offset = FindWalkableOffset(pt, math.random() * 2 * PI, HASSLER_SPAWN_DIST, 12, true)
-		if offset ~= nil then
-			offset.x = offset.x + pt.x
-			offset.z = offset.z + pt.z
-			return offset
+
+		-- A target can stand near a region border. Keep the actual spawn in the
+		-- target's eligible exterior subregion, never in a city, volcano, DST,
+		-- or an interior.
+		for _ = 1, 8 do
+			local offset = FindWalkableOffset(pt, math.random() * 2 * PI, HASSLER_SPAWN_DIST, 12, true)
+			if offset ~= nil then
+				offset.x = offset.x + pt.x
+				offset.z = offset.z + pt.z
+				if TheWorld.Map:IsSubregionAtPoint(offset.x, 0, offset.z, RegionDefs.GetSubregionId(subregion))
+					and not TheWorld.Map:IsInteriorAtPoint(offset.x, 0, offset.z) then
+					return offset
+				end
+			end
 		end
 	end
 
@@ -104,7 +132,8 @@ return Class(function(self, inst)
 			return nil
 		end
 
-		local spawn_pt = GetSpawnPoint(targetPlayer:GetPosition())
+		local subregion = GetTwisterSubregion(targetPlayer)
+		local spawn_pt = subregion ~= nil and GetSpawnPoint(targetPlayer:GetPosition(), subregion) or nil
 		if spawn_pt ~= nil then
 			local hassler = SpawnPrefab("twister")
 			hassler.Physics:Teleport(spawn_pt:Get())
@@ -116,7 +145,8 @@ return Class(function(self, inst)
 	end
 
 	local function SpawnTwister()
-		if _numSpawned < _targetNum and TheWorld.state.isspring and TheWorld.state.cycles > TUNING.NO_BOSS_TIME then
+		if _numSpawned < _targetNum and ClimateProfiles.IsShipwreckedHurricane(TheWorld.state)
+			and TheWorld.state.cycles > TUNING.NO_BOSS_TIME then
 			local spawndelay = .25 * TheWorld.state.remainingdaysinseason * TUNING.TOTAL_DAY_TIME / _targetNum
 			local spawnrandom = .25 * spawndelay
 			if _timetospawn == nil or _timetospawn > spawndelay + spawnrandom then
@@ -134,13 +164,23 @@ return Class(function(self, inst)
 	--[[ Private event handlers ]]
 	--------------------------------------------------------------------------
 
-	local function OnSeasonTick(src, data)
-		-- If twister gets killed and twister isn't set to lots, _lastTwisterKillDay will be set
-		-- In this case, we need to not respawn until the following spring, so let's make sure that
-		-- a fairly large number of days has passed since the kill.
-		--print("TwisterSpawner got isspring event", _lastTwisterKillDay or "nil", TheWorld.state.cycles)
+	local function OnHurricaneSeasonChanged()
+		local is_hurricane = ClimateProfiles.IsShipwreckedHurricane(TheWorld.state)
+		_lastWorldTime = GetWorldTimeSeconds()
+		if not is_hurricane then
+			_warning = false
+			_timetospawn = nil
+			_targetplayer = nil
+			self.inst:StopUpdatingComponent(self)
+			return
+		end
 
-		if data.season == "spring" and (not _lastTwisterKillDay or ((TheWorld.state.cycles - _lastTwisterKillDay) > TUNING.NO_BOSS_TIME)) then
+		-- If twister gets killed and twister isn't set to lots, _lastTwisterKillDay will be set
+		-- In this case, we need to not respawn until the following hurricane season, so let's make sure that
+		-- a fairly large number of days has passed since the kill.
+		--print("TwisterSpawner got hurricane event", _lastTwisterKillDay or "nil", TheWorld.state.cycles)
+
+		if not _lastTwisterKillDay or ((TheWorld.state.cycles - _lastTwisterKillDay) > TUNING.NO_BOSS_TIME) then
 			_targetNum = 0
 			local chance = math.random()
 			--print("Spawning first twister?", chance, _firstTwisterSpawnChance)
@@ -154,7 +194,7 @@ return Class(function(self, inst)
 				_targetNum = _targetNum + 1
 			end
 
-			--print("Onspring chose target number ", _targetNum )
+			--print("OnHurricaneSeasonChanged chose target number ", _targetNum )
 			local numActive = 0
 			for i, v in pairs(_activehasslers) do
 				if v ~= nil then
@@ -172,7 +212,7 @@ return Class(function(self, inst)
 				SpawnTwister()
 			end
 			--else
-			--print("TwisterSpawner got end spring")
+			--print("TwisterSpawner got end hurricane season")
 		end
 	end
 
@@ -265,6 +305,11 @@ return Class(function(self, inst)
     end
 
 	function self:OnUpdate(dt)
+		local now = GetWorldTimeSeconds()
+		local world_dt = now - _lastWorldTime
+		_lastWorldTime = now
+		dt = world_dt > 0 and world_dt or 0
+
 		--print("TwisterSpawner time to spawn is ", _timetospawn or "nil", _numSpawned or "0", _targetNum or "0")
 		if _timetospawn ~= nil then
 			_timetospawn = _timetospawn - dt
@@ -358,6 +403,7 @@ return Class(function(self, inst)
 		_targetNum = data.targetnum or 0
 		_lastTwisterKillDay = data.lastKillDay
 		_numSpawned = data.numSpawned or 0
+		_lastWorldTime = GetWorldTimeSeconds()
 
 		--print("Twister OnLoad", _targetNum or "nil", _timetospawn or "nil", _numSpawned or "nil", _lastTwisterKillDay or "nil")
 		self.inst:StopUpdatingComponent(self)
@@ -408,6 +454,7 @@ return Class(function(self, inst)
 
 	function self:SummonMonster(player)
 		_timetospawn = 10
+		_lastWorldTime = GetWorldTimeSeconds()
 		self.inst:StartUpdatingComponent(self)
 	end
 
@@ -420,7 +467,12 @@ return Class(function(self, inst)
 
 	self.inst:ListenForEvent("ms_playerjoined", OnPlayerJoined, TheWorld)
 	self.inst:ListenForEvent("ms_playerleft", OnPlayerLeft, TheWorld)
-	self.inst:ListenForEvent("seasontick", OnSeasonTick, TheWorld)
+	self.inst:WatchWorldState("season", OnHurricaneSeasonChanged)
 	self.inst:ListenForEvent("twisterremoved", OnHasslerRemoved, TheWorld)
 	self.inst:ListenForEvent("twisterkilled", OnHasslerKilled, TheWorld)
+	self.inst:DoTaskInTime(0, function()
+		if ClimateProfiles.IsShipwreckedHurricane(TheWorld.state) then
+			OnHurricaneSeasonChanged()
+		end
+	end)
 end)

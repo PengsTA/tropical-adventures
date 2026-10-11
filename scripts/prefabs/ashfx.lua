@@ -54,6 +54,7 @@ end
 
 local MAX_LIFETIME = 7
 local MIN_LIFETIME = 4
+local DEFAULT_PARTICLES_PER_SECOND = 20
 
 --------------------------------------------------------------------------
 
@@ -79,8 +80,7 @@ local function fn()
     local rng = math.random
     local tick_time = TheSim:GetTickTime()
 
-    local desired_particles_per_second = 0 --300
-    inst.particles_per_tick = desired_particles_per_second * tick_time
+    inst.particles_per_tick = 0
 
     inst.num_particles_to_emit = inst.particles_per_tick
 
@@ -141,6 +141,10 @@ local function fn()
     end
 
     EmitterManager:AddEmitter(inst, nil, update_fn)
+
+    function inst:SetEmissionRate(particles_per_second)
+        inst.particles_per_tick = math.max(0, particles_per_second or DEFAULT_PARTICLES_PER_SECOND) * tick_time
+    end
 
     function inst:PostInit()
         local dt = 1 / 30

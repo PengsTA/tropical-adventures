@@ -21,9 +21,34 @@ function TrapMarker:HideMarker()
      self:Hide()
 end
 
+local function SafeErodeAndRemove(fx, time)
+     if not fx or not fx:IsValid() then return end
+     if fx._safe_eroding then return end
+     fx._safe_eroding = true
+     fx:StartThread(function()
+          local ticks = 0
+          local tick_time = TheSim:GetTickTime()
+          local time_to_erode = time or 0.5
+          while ticks * tick_time < time_to_erode do
+               if not fx:IsValid() then return end
+               local erode_amount = ticks * tick_time / time_to_erode
+               if fx.AnimState then
+                    fx.AnimState:SetErosionParams(erode_amount, 0.1, 1.0)
+               end
+               ticks = ticks + 1
+               Yield()
+          end
+          if fx:IsValid() then
+               fx:Remove()
+          end
+     end)
+end
+
 function TrapMarker:ClearMarker()
      for t,m in pairs(self.markers) do
-          m:Remove()
+          if m:IsValid() then
+               m:Remove()
+          end
           self.markers[t] = nil
      end
 end
@@ -48,11 +73,14 @@ function TrapMarker:OnUpdate(dt)
      end
 
      for t,m in pairs(self.markers) do
-          if not t:HasTag("invisible") then
-               ErodeAway(m, 0.5)
+          if not t:IsValid() then
+               if m:IsValid() then m:Remove() end
+               self.markers[t] = nil
+          elseif not t:HasTag("invisible") then
+               SafeErodeAndRemove(m, 0.5)
                self.markers[t] = nil
           elseif old_markers[t] == true then
-               m:Remove()
+               if m:IsValid() then m:Remove() end
                self.markers[t] = nil
           end
      end
