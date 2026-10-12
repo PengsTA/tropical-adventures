@@ -17,11 +17,11 @@ local function GetVolcanicAshRate()
 
     local active = network._tropical_volcano_active ~= nil and network._tropical_volcano_active:value()
     local eruption_rate = network._tropical_volcano_ashrate ~= nil and network._tropical_volcano_ashrate:value() or 0
-    return math.max(eruption_rate, active and 6 or 1)
+    return TUNING.volcano and math.max(eruption_rate, active and 6 or 1) or 0
 end
 
 local function UpdateLocalVolcanicAsh(inst)
-    local ash_rate = IsLocalPlayerInShipwreckedExterior(inst) and GetVolcanicAshRate() or 0
+    local ash_rate = TheWorld._ta_config_ready and IsLocalPlayerInShipwreckedExterior(inst) and GetVolcanicAshRate() or 0
     local should_emit = ash_rate > 0
     local ash = inst._tropical_volcanicash
     if should_emit then
@@ -103,7 +103,7 @@ AddPlayerPostInit(function(inst)
     if not TheNet:IsDedicated() then
         -- The local player can be assigned after the first deferred postinit task.
         local function AttachLocalWeatherVisuals()
-            if inst == ThePlayer then
+            if inst == ThePlayer and TheWorld._ta_config_ready then
                 if inst.components.oceanedgevisuals == nil then
                     inst:AddComponent("oceanedgevisuals")
                 end
@@ -113,21 +113,22 @@ AddPlayerPostInit(function(inst)
                 if inst.components.hurricanevisuals == nil then
                     inst:AddComponent("hurricanevisuals")
                 end
+                if inst.components.tilechangewatcher == nil then inst:AddComponent("tilechangewatcher") end
+                if inst.components.water_tilemanager == nil then inst:AddComponent("water_tilemanager") end
+                if inst.components.floodwatervisuals == nil then inst:AddComponent("floodwatervisuals") end
+                if inst.components.floodfootsteps == nil then inst:AddComponent("floodfootsteps") end
+                if not inst._ta_ash_attached then
+                    inst._ta_ash_attached = true
+                    AttachLocalVolcanicAsh(inst)
+                end
+                inst.components.monsoonvisuals:Refresh()
+                inst.components.hurricanevisuals:Refresh()
+                inst.components.floodwatervisuals:Refresh()
             end
         end
         inst:ListenForEvent("playeractivated", AttachLocalWeatherVisuals)
-        inst:DoStaticTaskInTime(0, function()
-            AttachLocalWeatherVisuals()
-            if inst == ThePlayer then -- only do this for the local player character
-                inst:AddComponent("tilechangewatcher")
-                inst:AddComponent("water_tilemanager")
-                inst:AddComponent("floodwatervisuals")
-                if TUNING.flood then
-                    inst:AddComponent("floodfootsteps")
-                end
-                AttachLocalVolcanicAsh(inst)
-            end
-        end)
+        inst:ListenForEvent("taconfigready", AttachLocalWeatherVisuals, TheWorld)
+        inst:DoStaticTaskInTime(0, AttachLocalWeatherVisuals)
     end
 
     inst:AddComponent("infestable")

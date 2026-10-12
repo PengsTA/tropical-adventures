@@ -54,7 +54,7 @@ end
 
 function HurricaneVisuals:IsActive()
     local network = self:GetNetwork()
-    return self:IsInHurricaneRegion()
+    return TheWorld._ta_config_ready and self:IsInHurricaneRegion()
         and network ~= nil
         and network._tropical_hurricane_active ~= nil
         and network._tropical_hurricane_active:value()

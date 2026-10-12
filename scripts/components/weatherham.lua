@@ -78,7 +78,7 @@ return Class(function(self, inst)
 
         local player = _activatedplayer
         local rate = 0
-        if player ~= nil
+        if _world._ta_config_ready and player ~= nil
             and not player:HasTag(RegionDefs.INTERIOR_TAG)
             and RegionDefs.HasPrimaryRegion(player, RegionDefs.PRIMARY.hamlet) then
             rate = _pollendustrate:value()
@@ -132,6 +132,15 @@ return Class(function(self, inst)
     local function OnPlayerRegionChanged()
         UpdatePollenFx()
     end
+
+    function self:Refresh()
+        _lastweather = nil
+        UpdateWeatherState()
+        PushWeather()
+        UpdatePollenFx()
+    end
+
+    inst:ListenForEvent("taconfigready", function() self:Refresh() end, _world)
 
     local function OnPlayerActivated(_, player)
         _activatedplayer = player

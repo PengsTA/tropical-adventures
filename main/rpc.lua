@@ -20,7 +20,14 @@ end)
 
 AddShardModRPCHandler("TropicalAdventures", "SyncAporkalypseBeginDate", function(shardid, date)
     local aporkalypse = TheWorld.components.aporkalypse
-    if aporkalypse ~= nil then
-        aporkalypse.begin_date = date
+    if TheWorld.ismastershard and aporkalypse ~= nil then
+        aporkalypse:ScheduleAporkalypse(date)
+    end
+end)
+
+AddShardModRPCHandler("TropicalAdventures", "AdjustAporkalypseBeginDate", function(shardid, delta)
+    local aporkalypse = TheWorld.components.aporkalypse
+    if TheWorld.ismastershard and aporkalypse ~= nil then
+        aporkalypse:AdjustBeginDate(delta)
     end
 end)

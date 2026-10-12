@@ -128,7 +128,7 @@ end
 
 
 
-global_options =
+local ocean_options =
 {
 
     -- {
@@ -161,7 +161,7 @@ global_options =
     {
         name = "ocean_style",
         label = en_zh("Ocean Style", "海洋风格"),
-        hover = en_zh("Ocean Style", "海洋风格"),
+        hover = en_zh("Local ocean appearance; each player chooses independently.", "仅影响本地海洋外观，每位玩家可独立选择。"),
         options =
         {
             {
@@ -184,6 +184,10 @@ global_options =
         },
         default = "blue",
     },
+}
+
+global_options =
+{
 
     {
         name = "compatible_adjustment",
@@ -248,8 +252,7 @@ developer_options =
 
 client_options =
 {
-
-
+    ocean_options[1],
     {
         name = "room_view_key",
         label = en_zh("Room view", "房间视角"),
@@ -692,7 +695,7 @@ local climate_options = {
         options = options_enable,
         default = "enabled",
         order = 19,
-        image = "blank_world.tex",
+        image = "brambles.tex",
         atlas = ham_atlas,
         world = { "forest" },
     },
@@ -700,13 +703,16 @@ local climate_options = {
     {
         name = "aporkalypse",
         label = en_zh("Aporkalypse", "毁灭季"),
-        hover = en_zh("Aporkalypse, but in caves", "毁灭季 但是在洞穴"),
+        hover = en_zh("Shared by all shards and clients; also editable in the master world settings.",
+            "所有服务器和客机共用，也可在主世界的设置面板中调整。"),
         options = options_enable,
         default = "enabled",
         order = 19,
         image = "aporkalypse.tex",
         atlas = ham_atlas,
-        world = { "forest", "cave" },
+        world = { "forest" },
+        masteroption = true,
+        master_controlled = true,
     },
 
     {
@@ -738,9 +744,6 @@ end
 
 
 table_insert(configuration_options, Breaker("Client Adjustments", "客户端调整"))
-table_insert(configuration_options, Breaker("Belows are Client Settings", "以下为客户端设置"))
-table_insert(configuration_options, Breaker("DO NOT WORK ", "“创建游戏”时设置无效"))
-table_insert(configuration_options, Breaker("WHEN HOSTING GAME", ""))
 
 for i, v in my_ipairs(client_options) do
     table_insert(configuration_options, v)
@@ -751,13 +754,11 @@ for i, v in my_ipairs(global_options) do
     table_insert(configuration_options, v)
 end
 
-table_insert(configuration_options, Breaker("World Generation", "世界生成"))
-for _, option in my_ipairs(worldgen_options) do
-    table_insert(configuration_options, option)
-end
-table_insert(configuration_options, Breaker("Climate", "气候"))
+table_insert(configuration_options, Breaker("Shared Climate", "共享气候"))
 for _, option in my_ipairs(climate_options) do
-    table_insert(configuration_options, option)
+    if option.name == "aporkalypse" then
+        table_insert(configuration_options, option)
+    end
 end
 
 -- table_insert(configuration_options, Breaker("Option Reset ", "选项重置"))

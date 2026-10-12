@@ -48,7 +48,7 @@ AddPrefabPostInit("world", function(inst)
     if TheWorld.ismastersim then
         inst:AddComponent("tigersharker")
     end
-    if TUNING.aporkalypse and TheWorld.ismastersim then
+    if TUNING.aporkalypse and TheWorld.ismastersim and TheWorld.ismastershard then
         inst:AddComponent("aporkalypse")
         if KnownModIndex:IsModEnabled("workshop-2657513551") then
             inst:AddComponent("dsa_aporkalypse_proxy")
@@ -96,16 +96,23 @@ end)
 -- end
 -------------------------
 local PHASE_NAMES = { "fiesta", "calm", "near", "aporkalypse", }
-local PHASES = table.invert(PHASE_NAMES)
 
 local function NetAporkalypsePostInit(inst)
-    if TUNING.aporkalypse then
-        inst._aporkalypse_phase = net_tinybyte(inst.GUID, "aporkalypse.phase", "aporkalypse.phasedirty")
-        inst._aporkalypse_phase:set_local(2)
-        inst:ListenForEvent("aporkalypse.phasedirty", function()
+    inst._ta_aporkalypse_enabled = net_bool(inst.GUID, "ta.aporkalypse_enabled", "ta.aporkalypseconfigdirty")
+    inst._ta_aporkalypse_enabled:set_local(false)
+    inst._aporkalypse_phase = net_tinybyte(inst.GUID, "aporkalypse.phase", "aporkalypse.phasedirty")
+    inst._aporkalypse_phase:set_local(2)
+    inst:ListenForEvent("ta.aporkalypseconfigdirty", function()
+        TA_CONFIG.SetAporkalypseEnabled(inst._ta_aporkalypse_enabled:value())
+    end)
+    inst:ListenForEvent("aporkalypse.phasedirty", function()
+        if not TheWorld.ismastersim and TheWorld._ta_config_ready then
             TheWorld:PushEvent("aporkalypsephasechanged", PHASE_NAMES[inst._aporkalypse_phase:value()])
-        end)
-        if TheWorld and TheWorld.ismastersim and TheWorld.components.aporkalypse then
+        end
+    end)
+    if TheWorld.ismastersim then
+        inst._ta_aporkalypse_enabled:set(TUNING.aporkalypse == true)
+        if TheWorld.components.aporkalypse then
             inst._aporkalypse_phase:set(TheWorld.components.aporkalypse._phase)
         end
     end
@@ -214,16 +221,5 @@ end)
 AddPrefabPostInit("cave_network", NetAporkalypsePostInit)
 
 AddPrefabPostInit("shard_network", function(inst)
-    if TUNING.aporkalypse then
-        inst._aporkalypse_begin_date = net_uint(inst.GUID, "aporkalypse.begin_date", "aporkalypse.begin_datedirty")
-        inst._aporkalypse_begin_date:set_local(57600)
-        inst:ListenForEvent("aporkalypse.begin_datedirty", function()
-            if TheWorld.components.aporkalypse ~= nil then
-                TheWorld.components.aporkalypse.begin_date = inst._aporkalypse_begin_date:value()
-            end
-        end)
-        if TheWorld.ismastershard then
-            Shard_SyncAporkalypseBeginDate()
-        end
-    end
+    inst:AddComponent("shard_aporkalypse")
 end)

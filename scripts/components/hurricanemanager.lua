@@ -173,7 +173,7 @@ function HurricaneManager:SyncNetworkState()
     end
 
     local storm_strength = math.floor(Clamp(self.storm_strength, 0, 1) * 100 + .5)
-    local hail_rate = math.floor(Clamp(self.hail_rate, 0, 1) * 100 + .5)
+    local hail_rate = TUNING.hail and math.floor(Clamp(self.hail_rate, 0, 1) * 100 + .5) or 0
     if network._tropical_hurricane_active:value() ~= self.active then
         network._tropical_hurricane_active:set(self.active)
     end

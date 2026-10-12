@@ -111,7 +111,7 @@ AddComponentPostInit("ambientlighting", function(self, inst)
 		local _ComputeTargetColour = Upvaluehelper.GetUpvalue(DoUpdateFlash, "ComputeTargetColour")
 
 		local function ComputeTargetColour(targetsettings, timeoverride, ...)
-			if not TheWorld:HasTag("cave") and TheWorld.state.isaporkalypse and targetsettings.currentcolourset.PHASE_COLOURS.spring then
+			if TheWorld._ta_config_ready and not TheWorld:HasTag("cave") and TheWorld.state.isaporkalypse and targetsettings.currentcolourset.PHASE_COLOURS.spring then
 				local temp = targetsettings.currentcolourset
 				targetsettings.currentcolourset = COLOURS.APORKALYPSE_COLOURS
 				_ComputeTargetColour(targetsettings, timeoverride, ...)
@@ -133,6 +133,7 @@ AddComponentPostInit("ambientlighting", function(self, inst)
 
 		self.inst:WatchWorldState("startaporkalypse", OnClimateChanged) ----为什么 用isaporkalypse就不行呢
 		self.inst:WatchWorldState("stopaporkalypse", OnClimateChanged)
+		self.inst:ListenForEvent("taconfigready", OnClimateChanged, TheWorld)
 		self.inst:DoTaskInTime(0, OnClimateChanged)               --initialise
 	end
 end)

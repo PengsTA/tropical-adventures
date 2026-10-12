@@ -1,247 +1,269 @@
-local _daytime = TUNING.TOTAL_DAY_TIME -- 480s
-local _seg = TUNING.SEG_TIME * 8       -- 30s
-local PHASE_NAMES = { "fiesta", "calm", "near", "aporkalypse", }
+local DAY_TIME = TUNING.TOTAL_DAY_TIME
+local SEG_TIME = TUNING.SEG_TIME * 8
+local PHASE_NAMES = { "fiesta", "calm", "near", "aporkalypse" }
 local PHASES = table.invert(PHASE_NAMES)
 
-function Shard_SyncAporkalypseBeginDate(date)
-    date = date or TheWorld.components.aporkalypse ~= nil and TheWorld.components.aporkalypse.begin_date
-    if date == nil or not (TheWorld.shard and TheWorld.shard._aporkalypse_begin_date) then return end
-    if Shard_IsMaster() then
-        TheWorld.shard._aporkalypse_begin_date:set(date)
+local function IsFinite(value)
+    return type(value) == "number" and value == value and value > -math.huge and value < math.huge
+end
+
+local function IsValidState(data)
+    return type(data) == "table" and PHASE_NAMES[data.phase] ~= nil
+        and IsFinite(data.begin_date) and IsFinite(data.real_start_date)
+        and IsFinite(data.fiesta_begin_date) and type(data.first_time) == "boolean"
+end
+
+local function OnBeginDate(self, new, old)
+    if new == old or self._updating then return end
+    if not IsFinite(new) then
+        self._updating = true
+        self.begin_date = old
+        self._updating = false
+        return
+    end
+    if not self.inst.ismastershard then
+        -- A secondary may request a change, but cannot change its cached master state.
+        self._updating = true
+        self.begin_date = old
+        self._updating = false
+        self:ScheduleAporkalypse(new)
     else
+        self:SyncState()
+    end
+end
+
+local function OnPhase(self, new, old)
+    if new ~= old and not self._updating then self:SyncState() end
+end
+
+local Aporkalypse = Class(function(self, inst)
+    assert(inst.ismastersim, "aporkalypse should not exist on client")
+    self.inst = inst
+    self.near_days = 7 * DAY_TIME
+    self.aporkalypse_duration = 20 * DAY_TIME
+    self.should_fiesta_duration = 3 * DAY_TIME
+    self.fiesta_duration = 7 * DAY_TIME
+    self.periodtime = 120 * DAY_TIME
+
+    self._updating = true
+    self.first_time = true
+    self.begin_date = self.periodtime
+    self.real_start_date = 0
+    self.fiesta_begin_date = 0
+    self._phase = PHASES.calm
+    self._updating = false
+
+    self._onclocktick = function() self:OnClockTick() end
+    self._ontimerdone = function(_, data) self:OnTimerDone(data) end
+    if inst.ismastershard then
+        inst:ListenForEvent("clocktick", self._onclocktick)
+        self:QueueInitialSync()
+    end
+    inst:ListenForEvent("timerdone", self._ontimerdone)
+end, nil, { begin_date = OnBeginDate, _phase = OnPhase })
+
+function Aporkalypse:GetTimeInSeconds()
+    return (self.inst.state.cycles + self.inst.state.time) * DAY_TIME
+end
+
+function Aporkalypse:GetState()
+    return {
+        phase = self._phase,
+        begin_date = self.begin_date,
+        real_start_date = self.real_start_date,
+        fiesta_begin_date = self.fiesta_begin_date,
+        first_time = self.first_time,
+    }
+end
+
+function Aporkalypse:RestoreState(data)
+    if not IsValidState(data) then return false end
+    self._updating = true
+    self.begin_date = data.begin_date
+    self.real_start_date = data.real_start_date
+    self.fiesta_begin_date = data.fiesta_begin_date
+    self.first_time = data.first_time
+    self._phase = data.phase
+    self._updating = false
+    return true
+end
+
+function Aporkalypse:ApplyMasterState(data)
+    if self.inst.ismastershard or not self:RestoreState(data) then return false end
+    self:SyncState()
+    return true
+end
+
+function Aporkalypse:SyncState()
+    local inst = self.inst
+    if inst.net ~= nil and inst.net._aporkalypse_phase ~= nil then
+        inst.net._aporkalypse_phase:set(self._phase)
+    end
+    if inst.components.dsa_aporkalypse_proxy ~= nil then
+        inst.components.dsa_aporkalypse_proxy:SetDate(self.begin_date)
+    end
+    if self._local_phase ~= self._phase then
+        self._local_phase = self._phase
+        if self:IsActive() then
+            self:ScheduleAporkalypseTasks()
+        else
+            inst.components.timer:StopTimer("aporkalypse.herald")
+            inst.components.timer:StopTimer("aporkalypse.vampire")
+        end
+        -- Server world state must update even on a dedicated server without clients.
+        inst:PushEvent("aporkalypsephasechanged", PHASE_NAMES[self._phase])
+    end
+    if inst.ismastershard then inst:PushEvent("master_aporkalypseupdate") end
+end
+
+function Aporkalypse:QueueInitialSync()
+    if self._initial_sync ~= nil then self._initial_sync:Cancel() end
+    self._initial_sync = self.inst:DoTaskInTime(0, function()
+        self._initial_sync = nil
+        -- World timers and the saved state have finished loading by this point.
+        self:SyncState()
+    end)
+end
+
+function Aporkalypse:OnClockTick()
+    if not self.inst.ismastershard then return end
+    local now = self:GetTimeInSeconds()
+    local old_phase, old_date = self._phase, self.begin_date
+    self._updating = true
+    if self._phase <= PHASES.calm and now >= self.begin_date - self.near_days then
+        self._phase = PHASES.near
+    end
+    if self._phase <= PHASES.near then
+        if now >= self.begin_date then
+            self.real_start_date = now
+            self._phase = PHASES.aporkalypse
+        end
+    elseif self:IsActive() then
+        if now > self.begin_date then
+            if now - self.real_start_date >= self.aporkalypse_duration then
+                self.fiesta_begin_date = now
+                self._phase = PHASES.fiesta
+                self:ScheduleAporkalypse()
+                self.first_time = false
+            end
+        else
+            if now - self.real_start_date >= self.should_fiesta_duration then
+                self.fiesta_begin_date = now
+                self._phase = PHASES.fiesta
+            else
+                self._phase = PHASES.calm
+            end
+            self.first_time = false
+        end
+    end
+    if self._phase == PHASES.fiesta and now - self.fiesta_begin_date > self.fiesta_duration then
+        self._phase = PHASES.calm
+    end
+    self._updating = false
+    if old_phase ~= self._phase or old_date ~= self.begin_date then self:SyncState() end
+end
+
+function Aporkalypse:ScheduleAporkalypse(date)
+    if date ~= nil and not IsFinite(date) then return end
+    if not self.inst.ismastershard then
         SendModRPCToShard(GetShardModRPC("TropicalAdventures", "SyncAporkalypseBeginDate"), SHARDID.MASTER, date)
+        return
+    end
+    local now = self:GetTimeInSeconds()
+    local delta = date ~= nil and date - now or self.periodtime
+    if delta > self.periodtime or delta < 0 then delta = delta % self.periodtime end
+    self.begin_date = now + delta
+end
+
+function Aporkalypse:AdjustBeginDate(delta)
+    if not IsFinite(delta) then return end
+    if self.inst.ismastershard then
+        self:ScheduleAporkalypse(self.begin_date + delta)
+    else
+        -- Deltas accumulate on the master even if a secondary's snapshot is delayed.
+        SendModRPCToShard(GetShardModRPC("TropicalAdventures", "AdjustAporkalypseBeginDate"), SHARDID.MASTER, delta)
     end
 end
 
-local function onbegindate(self, new, old)
-    if new == old then return end
-    if TheWorld ~= nil then
-        Shard_SyncAporkalypseBeginDate(new)
-        if TheWorld.components.dsa_aporkalypse_proxy ~= nil then
-            TheWorld.components.dsa_aporkalypse_proxy:SetDate(new)
+function Aporkalypse:ScheduleHeraldCheck()
+    local timer = self.inst.components.timer
+    if not timer:TimerExists("aporkalypse.herald") then
+        timer:StartTimer("aporkalypse.herald", math.random(SEG_TIME / 2, SEG_TIME) + SEG_TIME)
+    end
+end
+
+function Aporkalypse:ScheduleVampireBatCheck()
+    local timer = self.inst.components.timer
+    if not timer:TimerExists("aporkalypse.vampire") then
+        timer:StartTimer("aporkalypse.vampire", math.random(SEG_TIME / 8, SEG_TIME / 4))
+    end
+end
+
+function Aporkalypse:ScheduleAporkalypseTasks()
+    if self.inst:HasTag("cave") then self:ScheduleHeraldCheck() end
+    self:ScheduleVampireBatCheck()
+end
+
+function Aporkalypse:OnTimerDone(data)
+    if data == nil or not self:IsActive() then return end
+    if data.name == "aporkalypse.herald" then
+        for _, player in pairs(AllPlayers) do
+            if player:IsValid() and player.components.health ~= nil and not player.components.health:IsDead() then
+                local herald = GetClosestInstWithTag("ancient", player, 30)
+                if herald == nil then
+                    local position = FindNearbyLand(player:GetPosition())
+                    if position ~= nil then herald = SpawnAt("ancient_herald", position) end
+                end
+                if herald ~= nil and herald.components.combat ~= nil then
+                    herald.components.combat:SuggestTarget(player)
+                    break
+                end
+            end
+        end
+        self.inst.components.timer:StartTimer("aporkalypse.herald", math.random(SEG_TIME / 2, SEG_TIME))
+    elseif data.name == "aporkalypse.vampire" and #AllPlayers > 0 then
+        local count = math.ceil(math.min(16 * #AllPlayers, 50) / #AllPlayers)
+        for _, player in pairs(AllPlayers) do
+            if player:IsInWorld() and player:IsValid() and player.components.health ~= nil and not player.components.health:IsDead() then
+                for i = 1, count do
+                    local x, y, z = player.Transform:GetWorldPosition()
+                    local theta = math.random() * TWOPI
+                    local radius = 4 + math.random() * 16
+                    local bat = SpawnAt("circlingbat", Vector3(x + radius * math.sin(theta), 0, z + radius * math.cos(theta)))
+                    if bat ~= nil and bat.components.combat ~= nil then bat.components.combat:SuggestTarget(player) end
+                end
+            end
         end
     end
 end
 
-local function onphase(self, new)
-    if TheWorld ~= nil then
-        if TheWorld.net ~= nil and TheWorld.net._aporkalypse_phase ~= nil then
-            TheWorld.net._aporkalypse_phase:set(new)
-        end
-    end
-    if new ~= PHASES.aporkalypse and self.inst ~= nil and self.inst.components.timer ~= nil then
+function Aporkalypse:OnSave()
+    if self.inst.ismastershard then return self:GetState() end
+end
+
+function Aporkalypse:OnLoad(data)
+    if self.inst.ismastershard and self:RestoreState(data) then self:QueueInitialSync() end
+end
+
+function Aporkalypse:OnRemoveFromEntity()
+    if self._initial_sync ~= nil then self._initial_sync:Cancel() end
+    if self.inst.ismastershard then self.inst:RemoveEventCallback("clocktick", self._onclocktick) end
+    self.inst:RemoveEventCallback("timerdone", self._ontimerdone)
+    if self.inst.components.timer ~= nil then
         self.inst.components.timer:StopTimer("aporkalypse.herald")
         self.inst.components.timer:StopTimer("aporkalypse.vampire")
     end
 end
 
-return Class(function(self, inst) ---@param inst TheWorld
-    local _world = TheWorld
-    local _ismastershard = _world.ismastershard
-    assert(_world.ismastersim, "aporkalypse should not exist on client")
+Aporkalypse.OnRemoveEntity = Aporkalypse.OnRemoveFromEntity
 
-    local function GetTimeTnSeconds()
-        return (_world.state.cycles + _world.state.time) * _daytime
-    end
+function Aporkalypse:IsNear() return self._phase == PHASES.near end
+function Aporkalypse:GetBeginDate() return self.begin_date end
+function Aporkalypse:IsActive() return self._phase == PHASES.aporkalypse end
+function Aporkalypse:GetFiestaActive() return self._phase == PHASES.fiesta end
+function Aporkalypse:GetDebugString()
+    return string.format("aporkalypse begin_date: %.2f phase: %s (%s)", self.begin_date,
+        PHASE_NAMES[self._phase], self.inst.ismastershard and "master" or "replica")
+end
 
-    self.inst = inst
-
-    self.first_time = true
-    self.near_days = 7 * _daytime
-    self.aporkalypse_duration = 20 * _daytime
-    self.should_fiesta_duration = 3 * _daytime
-    self.fiesta_duration = 7 * _daytime
-    self.periodtime = 120 * _daytime
-
-    self.begin_date = self.periodtime
-    self.real_start_date = 0
-    self.fiesta_begin_date = 0
-
-    self._phase = PHASES.calm
-
-    local function onclocktick()
-        -- print("aporkalypsephase:", self._phase)
-        -- print("aporkalypsebegindate:", self.begin_date / daytime)
-        -- print("aporkalypsenowadays:", GetTimeTnSeconds() / daytime)
-        -- print("fiestadate:", self.fiesta_begin_date / daytime)
-
-        if self._phase <= PHASES.calm then
-            if GetTimeTnSeconds() >= (self.begin_date - self.near_days) then
-                self._phase = PHASES.near
-            end
-        end
-
-        if self._phase <= PHASES.near then
-            if GetTimeTnSeconds() >= self.begin_date then
-                self._phase = PHASES.aporkalypse
-                self.real_start_date = GetTimeTnSeconds()
-                self:ScheduleAporkalypseTasks()
-            end
-        elseif self._phase == PHASES.aporkalypse then
-            if GetTimeTnSeconds() > self.begin_date then
-                if (GetTimeTnSeconds() - self.real_start_date) >= self.aporkalypse_duration then
-                    self._phase = PHASES.fiesta
-                    self.fiesta_begin_date = GetTimeTnSeconds()
-                    self:ScheduleAporkalypse()
-                    self.first_time = false
-                end
-            else
-                if (GetTimeTnSeconds() - self.real_start_date) >= self.should_fiesta_duration then
-                    self._phase = PHASES.fiesta
-                    self.fiesta_begin_date = GetTimeTnSeconds()
-                    self.first_time = false
-                else
-                    self._phase = PHASES.calm
-                    self.first_time = false
-                end
-            end
-        end
-
-        if self._phase == PHASES.fiesta then
-            local fiesta_elapsed = GetTimeTnSeconds() - self.fiesta_begin_date
-            if self.fiesta_duration - fiesta_elapsed < 0 then
-                self._phase = PHASES.calm
-            end
-        end
-    end
-
-    local function onheraldtimerdone()
-        if self:IsActive() then
-            for _, player in pairs(AllPlayers) do
-                if player and player:IsValid() and player.components.health and not player.components.health:IsDead() then
-                    local herald = GetClosestInstWithTag("ancient", player, 30)
-                    if not herald then
-                        local valid_position = FindNearbyLand(player:GetPosition())
-                        if valid_position then herald = SpawnAt("ancient_herald", valid_position) end
-                    end
-                    if herald and herald.components.combat then
-                        herald.components.combat:SuggestTarget(player)
-                        break
-                    end
-                end
-            end
-            inst.components.timer:StartTimer("aporkalypse.herald", math.random(_seg / 2, _seg))
-        end
-    end
-
-    function self:ScheduleHeraldCheck()
-        inst.components.timer:StartTimer("aporkalypse.herald", math.random(_seg / 2, _seg) + _seg)
-    end
-
-    local function onvampiretimerdone()
-        if self:IsActive() then
-            local _num = math.ceil(math.min(16 * #AllPlayers, 50) / #AllPlayers)
-            for _, player in pairs(AllPlayers) do
-                if player and player:IsInWorld() and player:IsValid() and player.components.health and not player.components.health:IsDead() then
-                    for i = 1, _num do
-                        local x, y, z = player.Transform:GetWorldPosition()
-                        local theta = math.random() * TWOPI
-                        local r = 4 + math.random() * 16
-                        x = x + r * math.sin(theta)
-                        z = z + r * math.cos(theta)
-                        local vampirebat = SpawnAt("circlingbat", Vector3(x, 0, z))
-                        if vampirebat and vampirebat.components.combat then
-                            vampirebat.components.combat:SuggestTarget(player)
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local function ontimerdone(_, data)
-        if data ~= nil then
-            if data.name == "aporkalypse.herald" then
-                onheraldtimerdone()
-            elseif data.name == "aporkalypse.vampire" then
-                onvampiretimerdone()
-            end
-        end
-    end
-
-    function self:OnRemoveFromEntity()
-        inst:RemoveEventCallback("clocktick", onclocktick, _world)
-        inst:RemoveEventCallback("timerdone", ontimerdone)
-    end
-
-    self.OnRemoveEntity = self.OnRemoveFromEntity
-
-    if _ismastershard then
-        function self:OnSave(data)
-            return
-            {
-                phase = self._phase,
-                begin_date = self.begin_date,
-                real_start_date = self.real_start_date,
-                fiesta_begin_date = self.fiesta_begin_date,
-                first_time = self.first_time,
-            }
-        end
-
-        function self:OnLoad(data)
-            if data then
-                self._phase = data.phase or PHASES.calm --这里也会推送事件，所以不用手动推送了
-                self.fiesta_begin_date = data.fiesta_begin_date
-                self.first_time = data.first_time
-                self.real_start_date = data.real_start_date
-                self.begin_date = data.begin_date or (GetTimeTnSeconds() + (120 * _daytime))
-            end
-        end
-    end
-
-    function self:ScheduleAporkalypse(date)
-        local currentTime = GetTimeTnSeconds()
-        local delta = date and (date - GetTimeTnSeconds()) or self.periodtime
-        while delta > self.periodtime do
-            delta = delta % self.periodtime
-        end
-
-        while delta < 0 do
-            delta = delta + self.periodtime
-        end
-
-        self.begin_date = currentTime + delta
-    end
-
-    function self:ScheduleAporkalypseTasks()
-        if _world:HasTag("cave") then
-            self:ScheduleHeraldCheck()
-        end
-        self:ScheduleVampireBatCheck()
-    end
-
-    function self:ScheduleVampireBatCheck()
-        inst.components.timer:StartTimer("aporkalypse.vampire", math.random(_seg / 8, _seg / 4))
-    end
-
-    inst:ListenForEvent("clocktick", onclocktick, _world)
-
-    inst:ListenForEvent("timerdone", ontimerdone)
-
-    function self:IsNear()
-        return self._phase == PHASES.near
-    end
-
-    function self:GetBeginDate()
-        return self.begin_date
-    end
-
-    function self:IsActive()
-        return self._phase == PHASES.aporkalypse
-    end
-
-    function self:GetFiestaActive()
-        return self._phase == PHASES.fiesta
-    end
-
-    --function self:OnUpdate(dt) end
-
-    --self.LongUpdate = self.OnUpdate
-
-    function self:GetDebugString()
-        return string.format("aporkalypse begin_date: %d phase: %s", self.begin_date, PHASE_NAMES[self._phase])
-    end
-end, nil, {
-    begin_date = onbegindate,
-    _phase = onphase,
-})
+return Aporkalypse

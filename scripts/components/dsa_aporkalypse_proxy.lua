@@ -13,7 +13,7 @@ return Class(function(self, inst)
 
     function self:OnPostInit()
         local data = ShardGameIndex.dsa_extradata and ShardGameIndex.dsa_extradata.dsa_aporkalypse_proxy
-        if data and data.from ~= inst.worldprefab then
+        if inst.ismastershard and data and data.from ~= inst.worldprefab then
             if _aporkalypse == nil then
                 _begindate = 0
             else

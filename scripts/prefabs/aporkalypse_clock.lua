@@ -258,7 +258,7 @@ local function make_master_fn()
 				time_left_till_aporkalypse = math.max(aporkalypse:GetBeginDate() - total_time, 0) or 0
 				local dt = math.clamp(data.time, 0, 2 * TheSim:GetTickTime())
 				local rewind_time = inst.rewind_mult * dt * 250
-				aporkalypse:ScheduleAporkalypse(aporkalypse:GetBeginDate() + rewind_time)
+				aporkalypse:AdjustBeginDate(rewind_time)
 			end
 		end
 

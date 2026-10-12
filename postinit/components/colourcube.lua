@@ -115,7 +115,7 @@ AddComponentPostInit("colourcube", function(self)
 	local _activatedplayer
 	local _showencc = CUBES.default
 	local function UpdateAmbientCCTable(blendtime)
-		if _activatedplayer then
+		if _activatedplayer and TheWorld._ta_config_ready then
 			if TheWorld.state.isaporkalypse and not TheWorld:HasTag("cave") then
 				if _showencc ~= CUBES.aporkalypse then
 					_showencc = CUBES.aporkalypse
@@ -161,6 +161,7 @@ AddComponentPostInit("colourcube", function(self)
 		UpdateAmbientCCTable(2)
 	end
 	self.inst:WatchWorldState("isaporkalypse", onClimateDirtyfast)
+	self.inst:ListenForEvent("taconfigready", onClimateDirtyfast, TheWorld)
 	self.inst:ListenForEvent("playeractivated", function(src, player)
 		if player and _activatedplayer ~= player then
 			if _activatedplayer ~= nil then

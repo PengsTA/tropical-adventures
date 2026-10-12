@@ -30,7 +30,7 @@ local MonsoonVisuals = Class(function(self, inst)
 end)
 
 function MonsoonVisuals:IsActive()
-    if not self.active or not TUNING.wind or self.inst:HasTag("playerghost") then
+    if not self.active or not TheWorld._ta_config_ready or not TUNING.wind or self.inst:HasTag("playerghost") then
         return false
     end
 

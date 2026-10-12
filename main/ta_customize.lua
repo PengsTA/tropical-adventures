@@ -51,9 +51,4 @@ end
 
 
 
-------world setting overrides ----这个 东西是加载世界时执行的东西，对生成世界无效
--- local WSO = require("worldsettings_overrides")
--- WSO.Pre.coastline = function(difficulty)
---     TUNING.coastline = difficulty
---     print("set coastline11111111")
--- end
+-- Runtime Pre handlers are registered in main/ta_config before world creation.

@@ -622,7 +622,7 @@ function VolcanoManager:Appease(segments)
 end
 
 function VolcanoManager:RefreshSeason()
-    local should_be_active = ClimateProfiles.IsShipwreckedDry(TheWorld.state)
+    local should_be_active = TUNING.volcano and ClimateProfiles.IsShipwreckedDry(TheWorld.state) or false
     if should_be_active == self.active then
         if should_be_active then
             self:EnsureScheduleWatch()
